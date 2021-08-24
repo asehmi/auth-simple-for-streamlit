@@ -8,15 +8,15 @@
 
 ---
 
-I quite like the simplicity of the username/password database authentication solution in [this post](https://discuss.streamlit.io/t/authentication-script/14111) (by [madflier](https://discuss.streamlit.io/u/madflier)) over in the [Streamlit discussion forum](https://discuss.streamlit.io/). I thought I'd have a go at making it more _production-ready_.
+I liked the simplicity of the username/password database authentication solution in [this post](https://discuss.streamlit.io/t/authentication-script/14111) (by [madflier](https://discuss.streamlit.io/u/madflier)) over in the [Streamlit discussion forum](https://discuss.streamlit.io/). I thought I'd have a go at making it more _flexible_ and possibly _production ready_. My thought is contrary to madflier's objectives around simplicity, but since I've seen a lot of requests for simple database-backed authentication in the Streamlit discussion forum I felt it was worth the effort to take his solution one step further. I'm honoured to be a member of Streamlit's [Creators](https://streamlit.io/creators) group and I the opportunity to work on my ideas in a recent Streamlit internal hackathon. Apologies to madflier! :-)
 
-This idea is contrary to madflier's objectives around simplicity, but I've seen a lot of requests for simple database-backed authentication in the discussion forum (being one of Streamlit's [Creator](https://streamlit.io/creators) members) so felt it was worth the effort to take his solution one step further. I cranked out this solution as my contribution to a Streamlit internal hackathon. Apologies to madflier!
-
-As a side note, I've already implemented a [Streamlit component for Auth0 Authentication](https://github.com/asehmi/Data-Science-Meetup-Oxford/tree/master/StreamlitComponent) which is definitely the way to go, but feel that the Streamlit community is a little hesitant to take it up, perhaps because it's considered to be something for use in _big enterprise_ applications. That's not my experience given how easy it is to use [Auth0](https://auth0.com). Streamlit components can get complicated and require separate Streamlit and web apps to make them work, so perhaps something with fewer moving parts is more palatable for most folks getting on board with Streamlit **and** need authentication to boot.
+As a side note, I've already implemented a [Streamlit component for Auth0 Authentication](https://github.com/asehmi/Data-Science-Meetup-Oxford/tree/master/StreamlitComponent). That's definitely the way to go, but feel that the Streamlit community has been a little hesitant to take it up. Perhaps it's considered to be something for use in _big enterprise_ applications? That's not my experience, given how easy it is to use [Auth0](https://auth0.com). Streamlit components can get complicated and require separate Streamlit and web apps to make them work. So, perhaps something with fewer moving parts is more palatable for most folks (a) getting started with Streamlit, **and** (b) needing authentication to boot?
 
 I've redesigned the solution with the following features:
 
 - Added session state support so logins survive a Streamlit's top-down reruns which occur in it's normal execution.
+- Added support for `logout`, `authenticated` check, and a `requires_auth` function decorator to protect areas of your own apps, e.g. secure pages in a multi-page Streamlit application.
+- Built-in authentication/login status header widget that will sit nicely in most Streamlit apps.
 - Refactored the SQLite local DB dependency in the main auth module so it uses a DB provider design pattern implementation.
 - Given the refactoring, I added a simple factory for multiple provider implementations, so different persistence technologies could be used, for example a cloud DB.
   - In fact, I built an Airtable cloud databse provider which can replace SQLite as an alternative.
@@ -24,6 +24,10 @@ I've redesigned the solution with the following features:
 - Configuration has been externalised for things like database names and locations, cloud service account secrets, api keys, etc. The configuration is managed in a root `.env` and `env.py` files, and small Python settings files for the main app (`app_settings.py`), and each provider implementation (`settings.py`).
 - There's just enough exception handling to allow you to get a handle on your own extension implementations.
 - I use `debugpy` for remote debugging support of Streamlit apps, and include a litte module that makes it work better with Streamlit's execution reruns.
+
+All code is published under [MIT license](./LICENSE), so feel free to make changes and please **fork the repo if you're making changes and submit pull requests**.
+
+If you like this work, consider clicking that **star** button. Thanks!
 
 ## Installation and running the app
 
