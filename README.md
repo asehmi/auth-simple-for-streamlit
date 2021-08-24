@@ -35,13 +35,13 @@ If you like this work, consider clicking that **star** button. Thanks!
 
 The Streamlit app `app.py` illustrates how to hook `authlib` into your Streamlit applications.
 
-![app.py](./auth-simple-demo.webm)
+![app.py](./auth-simple-demo.gif)
 
 ### Database Admin
 
 The Streamlit app `admin.py` illustrates how to auto-start `authlib`'s superuser mode to create an initial SQLite database and manage users and user credentials.
 
-![admin.py](./auth-simple-admin-demo.webm)
+![admin.py](./auth-simple-admin-demo.gif)
 
 ## Installation and running the app
 
