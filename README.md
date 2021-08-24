@@ -12,17 +12,27 @@ I liked the simplicity of the username/password database authentication solution
 
 As a side note, I've already implemented a [Streamlit component for Auth0 Authentication](https://github.com/asehmi/Data-Science-Meetup-Oxford/tree/master/StreamlitComponent). That's definitely the way to go, but feel that the Streamlit community has been a little hesitant to take it up. Perhaps it's considered to be something for use in _big enterprise_ applications? That's not my experience, given how easy it is to use [Auth0](https://auth0.com). Streamlit components can get complicated and require separate Streamlit and web apps to make them work. So, perhaps something with fewer moving parts is more palatable for most folks (a) getting started with Streamlit, **and** (b) needing authentication to boot?
 
-I've redesigned the solution with the following features:
+I've redesigned the original solution and added the following functionality:
 
-- Added session state support so logins survive a Streamlit's top-down reruns which occur in it's normal execution.
-- Added support for `logout`, `authenticated` check, and a `requires_auth` function decorator to protect areas of your own apps, e.g. secure pages in a multi-page Streamlit application.
+- Session state support so logins survive a Streamlit's top-down reruns which occur in it's normal execution.
+
+- Support for `logout`, `authenticated` check, and a `requires_auth` function decorator to protect areas of your own apps, e.g. secure pages in a multi-page Streamlit application.
+  - See how `requires_auth` is used to secure superuser functions in `auth.py`. You can do the same in your code.
+
 - Built-in authentication/login status header widget that will sit nicely in most Streamlit apps.
+
 - Refactored the SQLite local DB dependency in the main auth module so it uses a DB provider design pattern implementation.
+
 - Given the refactoring, I added a simple factory for multiple provider implementations, so different persistence technologies could be used, for example a cloud DB.
   - In fact, I built an Airtable cloud databse provider which can replace SQLite as an alternative.
+
 - The abstract provider interface is super simple and should allow _almost_ any database to be adapted, and it works fine for this specific auth use case in the implementations I created.
+  - Some Streamliters have mentioned Google Sheets and Firebase - yep, they should be easy.
+
 - Configuration has been externalised for things like database names and locations, cloud service account secrets, api keys, etc. The configuration is managed in a root `.env` and `env.py` files, and small Python settings files for the main app (`app_settings.py`), and each provider implementation (`settings.py`).
+
 - There's just enough exception handling to allow you to get a handle on your own extension implementations.
+
 - I use `debugpy` for remote debugging support of Streamlit apps, and include a litte module that makes it work better with Streamlit's execution reruns.
 
 All code is published under [MIT license](./LICENSE), so feel free to make changes and please **fork the repo if you're making changes and submit pull requests**.
@@ -91,6 +101,7 @@ A full example (which includes Airtable settings) is available in `env.sample`.
 ### How to create an Airtable
 
 1. First, login into or create a (free) [**Airtable account**](https://airtable.com/account).
+
 2. Next, follow these steps to create an Airtable:
 
 - Create a database (referred to as a _base_ in Airtable) and a table within the base.
@@ -142,7 +153,11 @@ That's it! You're ready now to use the admin application or Airtable directly to
 Caveat emptor: you're free to use this solution at your own risk. I have a few more things to do:
 
 - Store a hashed password in the database, not as plain text. Note, the password is never sent to the browser - it's retrieved and matched on the Streamlit server - so is quite secure, but I'm definitely not following OWASP best practice.
-- Fix column and sort order in user table view from Airtable
+
+- Fix column and sort order in user table view from Airtable.
+
 - In addition to *username*, *password*, and *su* I want to add additional useful user data to the database: *logged_in*, *expires_at*, *logins_count*, *last_login*, *created_at*, *updated_at*.
+
 - Provide a Streamlit component wrapper to make it easy to _pip install_ and also use this simple authentication within custom component implementations.
+
 - Deploy the demo app on [Streamlit sharing](https://share.streamlit.io/) and use it's secrets store instead of my `.env` solution.
