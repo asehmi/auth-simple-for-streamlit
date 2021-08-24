@@ -1,0 +1,5 @@
+streamlit
+debugpy
+pyairtable
+dataclasses
+python-dotenv
