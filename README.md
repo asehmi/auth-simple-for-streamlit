@@ -29,6 +29,20 @@ All code is published under [MIT license](./LICENSE), so feel free to make chang
 
 If you like this work, consider clicking that **star** button. Thanks!
 
+## Demos
+
+### Test application
+
+The Streamlit app `app.py` illustrates how to hook `authlib` into your Streamlit applications.
+
+![app.py](./auth-simple-demo.webm)
+
+### Database Admin
+
+The Streamlit app `admin.py` illustrates how to auto-start `authlib`'s superuser mode to create an initial SQLite database and manage users and user credentials.
+
+![admin.py](./auth-simple-admin-demo.webm)
+
 ## Installation and running the app
 
 To install the pre-requisites, open a console window in the root folder and run:
@@ -127,6 +141,7 @@ That's it! You're ready now to use the admin application or Airtable directly to
 
 Caveat emptor: you're free to use this solution at your own risk. I have a few more things to do:
 
-- Store the password hashed and not in plain text. The password is not sent to the browser -- it's retrieved and matched on the Streamlit server -- so is quite secure, but I'm definitely not following OWASP best practice.
+- Store a hashed password in the database, not as plain text. Note, the password is never sent to the browser - it's retrieved and matched on the Streamlit server - so is quite secure, but I'm definitely not following OWASP best practice.
+- Fix column and sort order in user table view from Airtable
 - In addition to *username*, *password*, and *su* I want to add additional useful user data to the database: *logged_in*, *expires_at*, *logins_count*, *last_login*, *created_at*, *updated_at*.
 - Provide a Streamlit component wrapper to make it easy to _pip install_ and also use this simple authentication within custom component implementations.
