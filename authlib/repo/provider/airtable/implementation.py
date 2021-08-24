@@ -30,9 +30,11 @@ class AirtableProvider(StorageProvider):
         self.base = None
         self.table = None
 
-    def upsert(self, data: dict=None) -> None:
+    def upsert(self, context: dict=None) -> None:
         """Updates or inserts a new user record with supplied data (cols + value dict)."""
-        assert(data is not None)
+        assert(context.get('data', None) is not None)
+
+        data = context.get('data', None)
 
         logging.info(f"Upsert: {data}")
         try:
@@ -51,9 +53,13 @@ class AirtableProvider(StorageProvider):
             }, 500)
 
 
-    def query(self, fields: str=None, conds: str=None, modifier: str=None) -> List[dict]:
+    def query(self, context: dict=None) -> List[dict]:
         """Executes a query on users table and returns rows as list of dicts."""
-        assert(fields is not None)
+        assert(context.get('fields', None) is not None)
+
+        fields = context.get('fields', None)
+        conds = context.get('conds', None)
+        modifier = context.get('modifier', None)
 
         logging.info(f"Query: {fields}, {conds}, {modifier}")
         try:
@@ -75,9 +81,11 @@ class AirtableProvider(StorageProvider):
                 "message": str(ex),
             }, 500)
 
-    def delete(self, conds: str=None) -> None:
+    def delete(self, context: dict=None) -> None:
         """Deletes record from users table."""
-        assert(conds is not None)
+        assert(context.get('conds', None) is not None)
+
+        conds = context['conds']
 
         logging.info(f"Delete: {conds}")
         try:

@@ -136,9 +136,11 @@ class SQLiteProvider(StorageProvider):
 
     # UPDATE or CREATE
     # Note, username is UNIQUE ON CONFLICT REPLACE, so we use INSERT to get UPSERT behaviour
-    def upsert(self, data: dict=None) -> None:
+    def upsert(self, context: dict=None) -> None:
         """Updates or inserts a new user record with supplied data (cols + value dict)."""
-        assert(data is not None)
+        assert(context.get('data', None) is not None)
+
+        data = context.get('data', None)
 
         cols = ', '.join(list(data.keys()))
         # need to quote string values for SQLite
@@ -166,8 +168,14 @@ class SQLiteProvider(StorageProvider):
             }, 500)
 
     # READ
-    def query(self, fields: str=None, conds: str=None, modifier: str=None) -> List[dict]:
+    def query(self, context: dict=None) -> List[dict]:
         """Executes a query on users table and returns rows as list of dicts."""
+        assert(context.get('fields', None) is not None)
+
+        fields = context.get('fields', None)
+        conds = context.get('conds', None)
+        modifier = context.get('modifier', None)
+
         assert(fields is not None)
 
         select = f"SELECT {fields} FROM USERS "
@@ -190,9 +198,11 @@ class SQLiteProvider(StorageProvider):
             }, 500)
 
     # DELETE
-    def delete(self, conds: str=None) -> None:
+    def delete(self, context: dict=None) -> None:
         """Deletes record from users table."""
-        assert(conds is not None)
+        assert(context.get('conds', None) is not None)
+
+        conds = context['conds']
 
         select = f"DELETE FROM USERS "
         where = f"WHERE {conds} " if conds else "" 

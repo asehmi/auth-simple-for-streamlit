@@ -4,7 +4,7 @@
 
 > Arvindra Sehmi, CloudOpti Ltd. | [Website](https://sehmiconscious.blogspot.com) | [LinkedIn](https://www.linkedin.com/in/asehmi/)
 
-> Updated: 23 August, 2021
+> Updated: 24 August, 2021
 
 ---
 
@@ -20,7 +20,7 @@ I've redesigned the solution with the following features:
 - Refactored the SQLite local DB dependency in the main auth module so it uses a DB provider design pattern implementation.
 - Given the refactoring, I added a simple factory for multiple provider implementations, so different persistence technologies could be used, for example a cloud DB.
   - In fact, I built an Airtable cloud databse provider which can replace SQLite as an alternative.
-- The abstract provider interface is super simple and might not allow _any_ database to be adapted, but it works fine for this specific use case and the implementations I created.
+- The abstract provider interface is super simple and should allow _almost_ any database to be adapted, and it works fine for this specific auth use case in the implementations I created.
 - Configuration has been externalised for things like database names and locations, cloud service account secrets, api keys, etc. The configuration is managed in a root `.env` and `env.py` files, and small Python settings files for the main app (`app_settings.py`), and each provider implementation (`settings.py`).
 - There's just enough exception handling to allow you to get a handle on your own extension implementations.
 - I use `debugpy` for remote debugging support of Streamlit apps, and include a litte module that makes it work better with Streamlit's execution reruns.
@@ -145,3 +145,4 @@ Caveat emptor: you're free to use this solution at your own risk. I have a few m
 - Fix column and sort order in user table view from Airtable
 - In addition to *username*, *password*, and *su* I want to add additional useful user data to the database: *logged_in*, *expires_at*, *logins_count*, *last_login*, *created_at*, *updated_at*.
 - Provide a Streamlit component wrapper to make it easy to _pip install_ and also use this simple authentication within custom component implementations.
+- Deploy the demo app on [Streamlit sharing](https://share.streamlit.io/) and use it's secrets store instead of my `.env` solution.

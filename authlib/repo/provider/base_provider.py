@@ -21,19 +21,19 @@ class StorageProvider(ABC):
 
     # UPDATE/CREATE
     @abstractmethod
-    def upsert(self, data: dict=None) -> None:
+    def upsert(self, context: dict=None) -> None:
         """Updates or inserts a new user record with supplied data (cols + value dict)."""
         pass
 
     # READ
     @abstractmethod
-    def query(self, fields: str=None, conds: str=None, modifier: str=None) -> List[dict]:
+    def query(self, context: dict=None) -> List[dict]:
         """Executes a query on users table and returns rows as list of dicts."""
         pass
 
     # DELETE
     @abstractmethod
-    def delete(self, conds: str=None) -> None:
+    def delete(self, context: dict=None) -> None:
         """Deletes record from users table."""
         pass
 

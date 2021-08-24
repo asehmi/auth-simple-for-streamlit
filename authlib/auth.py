@@ -69,7 +69,8 @@ def _auth(sidebar=True, show_msgs=True):
             # get the store
             store = StorageFactory().get_provider(STORAGE, allow_db_create=False, if_table_exists='ignore')
             # check the table
-            store.query(fields="*", modifier="LIMIT 1")
+            ctx = {'fields': "*", 'modifier': "LIMIT 1"}
+            store.query(context=ctx)
         except Exception as ex:
             logging.warning(f">>> Storage exception <<<\n`{str(ex)}`")
             store = None
@@ -92,7 +93,8 @@ def _auth(sidebar=True, show_msgs=True):
 
         user = username_widget("Enter username", value='')
 
-        data = store.query(fields="*", conds=f"username=\"{user}\"")
+        ctx={'fields': "*", 'conds': f"username=\"{user}\""}
+        data = store.query(context=ctx)
         user = data[0] if data else None
         if user:
             password = password_widget("Enter password", type="password")
@@ -124,7 +126,8 @@ def auth(*args, **kwargs):
 @requires_auth
 def _list_users():
     st.subheader('List users')
-    data = store.query(fields="username, password, su")
+    ctx = {'fields': "username, password, su"}
+    data = store.query(context=ctx)
     if data:
         st.table(data)
     else:
@@ -137,18 +140,21 @@ def _create_user(name="", pwd="", is_su=False):
     password = st.text_input("Enter Password (required)", value=pwd)
     su = 1 if st.checkbox("Is this a superuser?", value=is_su) else 0
     if st.button("Update Database") and username and password:
-        store.upsert(data={"username": f"{username}", "password": f"{password}", "su": su})
+        ctx = {'data': {"username": f"{username}", "password": f"{password}", "su": su}}
+        store.upsert(context=ctx)
         # user_id, password, logged_in, expires_at, logins_count, last_login, created_at, updated_at, su
         st.write("`Database Updated`")
 
 @requires_auth
 def _edit_user():
     st.subheader('Edit user')
-    userlist = [row[const.USERNAME] for row in store.query(fields="username")]
+    ctx = {'fields': "username"}
+    userlist = [row[const.USERNAME] for row in store.query(context=ctx)]
     userlist.insert(0, "")
     edit_user = st.selectbox("Select user", options=userlist)
     if edit_user:
-        user_data = store.query(fields="username, password, su", conds=f"username=\"{edit_user}\"")
+        ctx = {'fields': "username, password, su", 'conds': f"username=\"{edit_user}\""}
+        user_data = store.query(context=ctx)
         _create_user(
             name=user_data[0][const.USERNAME],
             pwd=user_data[0][const.PASSWORD],
@@ -158,12 +164,14 @@ def _edit_user():
 @requires_auth
 def _delete_user():
     st.subheader('Delete user')
-    userlist = [row[const.USERNAME] for row in store.query(fields="username")]
+    ctx = {'fields': "username"}
+    userlist = [row[const.USERNAME] for row in store.query(context=ctx)]
     userlist.insert(0, "")
     del_user = st.selectbox("Select user", options=userlist)
     if del_user:
         if st.button(f"Remove {del_user}"):
-            store.delete(conds=f"username=\"{del_user}\"")
+            ctx = {'conds': f"username=\"{del_user}\""}
+            store.delete(context=ctx)
             st.write(f"`User {del_user} deleted`")
 
 @requires_auth
