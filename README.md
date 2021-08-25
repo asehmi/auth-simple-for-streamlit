@@ -1,5 +1,5 @@
 
-# Auth Simple for Streamlit
+# Simple Authentication for Streamlit Apps
 > _A simple username/password database authentication solution for Streamlit_
 
 > Arvindra Sehmi, CloudOpti Ltd. | [Website](https://sehmiconscious.blogspot.com) | [LinkedIn](https://www.linkedin.com/in/asehmi/)
