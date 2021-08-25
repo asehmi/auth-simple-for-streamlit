@@ -18,3 +18,4 @@ def verify():
     logging.info(f'>>> Environment loading status <<<')
     logging.info(f'--  Application base directory: {BASE_DIR}')
     logging.info(f'--  Dotenv file: {ENV_FILE}\n\n')
+

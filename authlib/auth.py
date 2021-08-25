@@ -6,12 +6,16 @@ import logging
 
 import streamlit as st
 
-from . import const
+from . import const, aes256cbcExtended
 
 # ------------------------------------------------------------------------------
 # Globals
+ENC_PASSWORD = osenv.get('ENC_PASSWORD')
+ENC_NONCE = osenv.get('ENC_NONCE')
+
 STORAGE = osenv.get('STORAGE', 'SQLITE')
 store = None
+
 # ------------------------------------------------------------------------------
 
 # Wrapping session state in a function ensures that 'user' (or any attribute really) is
@@ -91,15 +95,17 @@ def _auth(sidebar=True, show_msgs=True):
     if auth_state().user == None:
         set_auth_message('Please log in', delay=None, show_msgs=True)
 
-        user = username_widget("Enter username", value='')
+        username = username_widget("Enter username", value='')
 
-        ctx={'fields': "*", 'conds': f"username=\"{user}\""}
+        ctx={'fields': "*", 'conds': f"username=\"{username}\""}
         data = store.query(context=ctx)
         user = data[0] if data else None
         if user:
+            decrypted_password = aes256cbcExtended(ENC_PASSWORD, ENC_NONCE).decrypt(user[const.PASSWORD])
             password = password_widget("Enter password", type="password")
-            if password == user[const.PASSWORD]:
+            if password == decrypted_password:
                 # TODO: set active state and other fields then update DB
+                # Update user state, password is encrypted so secure
                 auth_state().user = user
                 set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
                 st.experimental_rerun()
@@ -134,15 +140,27 @@ def _list_users():
         st.write("`No entries in authentication database`")
 
 @requires_auth
-def _create_user(name="", pwd="", is_su=False):
+def _create_user(name=const.BLANK, pwd=const.BLANK, is_su=False, mode='create'):
     st.subheader('Create user')
-    username = st.text_input("Enter Username", value=name)
-    password = st.text_input("Enter Password (required)", value=pwd)
+    username = st.text_input("Enter Username (required)", value=name)
+    if mode == 'create':
+        password = st.text_input("Enter Password (required)", value=pwd)
+    elif mode == 'edit':
+        # Do not display password as DB stores them encrypted
+        # Passwords will always be created anew in edit mode
+        password = st.text_input("Enter Replacement Password (required)", value=const.BLANK)
     su = 1 if st.checkbox("Is this a superuser?", value=is_su) else 0
-    if st.button("Update Database") and username and password:
-        ctx = {'data': {"username": f"{username}", "password": f"{password}", "su": su}}
+    if st.button("Update Database") and username:
+        if password: # new password given
+            encrypted_password = aes256cbcExtended(ENC_PASSWORD, ENC_NONCE).encrypt(password)
+        elif mode == 'edit': # reuse old one
+            encrypted_password = pwd
+        elif mode == 'create': # Must have a password
+            st.write("`Database NOT Updated` (enter a password)")
+            return
+        # TODO: user_id, password, logged_in, expires_at, logins_count, last_login, created_at, updated_at, su
+        ctx = {'data': {"username": f"{username}", "password": f"{encrypted_password}", "su": su}}
         store.upsert(context=ctx)
-        # user_id, password, logged_in, expires_at, logins_count, last_login, created_at, updated_at, su
         st.write("`Database Updated`")
 
 @requires_auth
@@ -151,14 +169,15 @@ def _edit_user():
     ctx = {'fields': "username"}
     userlist = [row[const.USERNAME] for row in store.query(context=ctx)]
     userlist.insert(0, "")
-    edit_user = st.selectbox("Select user", options=userlist)
-    if edit_user:
-        ctx = {'fields': "username, password, su", 'conds': f"username=\"{edit_user}\""}
+    username = st.selectbox("Select user", options=userlist)
+    if username:
+        ctx = {'fields': "username, password, su", 'conds': f"username=\"{username}\""}
         user_data = store.query(context=ctx)
         _create_user(
             name=user_data[0][const.USERNAME],
             pwd=user_data[0][const.PASSWORD],
-            is_su=user_data[0][const.SU]
+            is_su=user_data[0][const.SU],
+            mode='edit'
         )
 
 @requires_auth
@@ -167,12 +186,12 @@ def _delete_user():
     ctx = {'fields': "username"}
     userlist = [row[const.USERNAME] for row in store.query(context=ctx)]
     userlist.insert(0, "")
-    del_user = st.selectbox("Select user", options=userlist)
-    if del_user:
-        if st.button(f"Remove {del_user}"):
-            ctx = {'conds': f"username=\"{del_user}\""}
+    username = st.selectbox("Select user", options=userlist)
+    if username:
+        if st.button(f"Remove {username}"):
+            ctx = {'conds': f"username=\"{username}\""}
             store.delete(context=ctx)
-            st.write(f"`User {del_user} deleted`")
+            st.write(f"`User {username} deleted`")
 
 @requires_auth
 def _superuser_mode():
@@ -198,5 +217,6 @@ def admin():
         global store
         store = StorageFactory().get_provider(STORAGE, allow_db_create=True, if_table_exists='ignore')
 
+        # Fake the admin user token to enable superuser mode (password field isn't required)
         auth_state().user = {'username': 'admin', 'su': 1}
         _superuser_mode()

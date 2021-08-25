@@ -4,13 +4,19 @@
 
 > Arvindra Sehmi, CloudOpti Ltd. | [Website](https://sehmiconscious.blogspot.com) | [LinkedIn](https://www.linkedin.com/in/asehmi/)
 
-> Updated: 24 August, 2021
+> Updated: 25 August, 2021
 
 ---
 
-I liked the simplicity of the username/password database authentication solution in [this post](https://discuss.streamlit.io/t/authentication-script/14111) (by [madflier](https://discuss.streamlit.io/u/madflier)) over in the [Streamlit discussion forum](https://discuss.streamlit.io/). I thought I'd have a go at making it more _flexible_ and possibly _production ready_. My thought is contrary to madflier's objectives around simplicity, but since I've seen a lot of requests for simple database-backed authentication in the Streamlit discussion forum I felt it was worth the effort to take his solution one step further. I'm honored to be a member of Streamlit's [Creators](https://streamlit.io/creators) group and I the opportunity to work on my ideas in a recent Streamlit internal hackathon. Apologies to madflier! :-)
+## Introduction
 
-As a side note, I've already implemented a [Streamlit component for Auth0 Authentication](https://github.com/asehmi/Data-Science-Meetup-Oxford/tree/master/StreamlitComponent). That's definitely the way to go, but feel that the Streamlit community has been a little hesitant to take it up. Perhaps it's considered to be something for use in _big enterprise_ applications? That's not my experience, given how easy it is to use [Auth0](https://auth0.com). Streamlit components can get complicated and require separate Streamlit and web apps to make them work. So, perhaps something with fewer moving parts is more palatable for most folks (a) getting started with Streamlit, **and** (b) needing authentication to boot?
+This is **not** an identity solution, it's a simple username/password login authentication solution using a backing database inspired by [this post](https://discuss.streamlit.io/t/authentication-script/14111) (written by [madflier](https://discuss.streamlit.io/u/madflier)) over in the [Streamlit discussion forum](https://discuss.streamlit.io/).
+
+I've previously implemented an authentication and identity solution: [Streamlit component for Auth0 Authentication](https://github.com/asehmi/Data-Science-Meetup-Oxford/tree/master/StreamlitComponent). That's definitely the solution I'd recommend but feel that the Streamlit community has been slow to take it up. Perhaps it's considered to be something for _big enterprise_ applications? Given how easy it is to use [Auth0](https://auth0.com) that's not true. Or perhaps, because Streamlit components can get complicated and require separate Streamlit and web apps to make them work, something else with fewer moving parts is more desirable? I don't know for sure what the blockers are and will be producing some tutorials on Auth0 + Streamlit integration soon to help educate our community.
+
+In the meantime, I think a solution like madflier's will be more palatable for many folks getting started with Streamlit **and** needing authentication? To fill this gap, I thought I'd build on his application and improve its _flexibility_ and _production readiness_. Though my aim is contrary to madflier's objectives around simplicity, there are so many requests for simple database-backed authentication in the Streamlit discussion forum that I felt it was worth the effort to take his solution several steps further. As an honorary member of Streamlit's [Creators](https://streamlit.io/creators) group I recently had the opportunity to work on my idea in a Streamlit-internal hackathon and this is what I'll describe here. Allow me to both apologise to madflier for the many changes I've made to his design and thank him for the initial spark! :-)
+
+## What I've built
 
 I've redesigned the original solution and added the following functionality:
 
@@ -22,6 +28,9 @@ I've redesigned the original solution and added the following functionality:
 - Built-in authentication/login status header widget that will sit nicely in most Streamlit apps.
 
 - Refactored the SQLite local DB dependency in the main auth module so it uses a DB provider design pattern implementation.
+
+- Passwords are stored hashed (MD5) & encrypted (AES256 CBC Extended) in the database, not as plain text. Note, the password is never sent to the
+browser - it's retrieved, decrypted and matched on the Streamlit server - so is quite secure. I'm definitely following OWASP best practice.
 
 - Given the refactoring, I added a simple factory for multiple provider implementations, so different persistence technologies could be used, for example a cloud DB.
   - In fact, I built an Airtable cloud database provider which can replace SQLite as an alternative.
@@ -92,7 +101,7 @@ For example:
 STORAGE='SQLITE'
 ```
 
-A full example (which includes Airtable settings) is available in `env.sample`.
+A full example (which includes Airtable and encryption key settings) is available in `env.sample`.
 
 2. Then, you must run the admin app as shown above to create your initial SQLite database!
 
@@ -144,15 +153,13 @@ AIRTABLE_PROFILE_BASE_ID = 'appv------X-----c'
 USERS_TABLE = 'users'
 ```
 
-A full example (which includes SQLite settings) is available in `env.sample`.
+A full example (which includes SQLite and encryption key settings) is available in `env.sample`.
 
 That's it! You're ready now to use the admin application or Airtable directly to manage the credentials of your users.
 
 ## TODO
 
 Caveat emptor: you're free to use this solution at your own risk. I have a few more things to do:
-
-- Store a hashed password in the database, not as plain text. Note, the password is never sent to the browser - it's retrieved and matched on the Streamlit server - so is quite secure, but I'm definitely not following OWASP best practice.
 
 - Fix column and sort order in user table view from Airtable.
 

@@ -7,6 +7,8 @@ ACTIVE          = 'active'
 LOGINS_COUNT    = 'logins_count'
 SU              = 'su'
 
+BLANK           = ''
+
 INFO            = 'info'
 WARNING         = 'warning'
 SUCCESS         = 'success'
