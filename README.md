@@ -20,7 +20,7 @@ In the meantime, I think a solution like madflier's will be more palatable for m
 
 I've redesigned the original solution and added the following functionality:
 
-- Session state support so logins survive a Streamlit's top-down reruns which occur in it's normal execution.
+- Session state support so logins survive Streamlit's top-down reruns which occur in it's normal execution.
 
 - Support for `logout`, `authenticated` check, and a `requires_auth` function decorator to protect areas of your own apps, e.g. secure pages in a multi-page Streamlit application.
   - See how `requires_auth` is used to secure superuser functions in `auth.py`. You can do the same in your code.
@@ -29,14 +29,14 @@ I've redesigned the original solution and added the following functionality:
 
 - Refactored the SQLite local DB dependency in the main auth module so it uses a DB provider design pattern implementation.
 
-- Passwords are stored hashed (MD5) & encrypted (AES256 CBC Extended) in the database, not as plain text. Note, the password is never sent to the
-browser - it's retrieved, decrypted and matched on the Streamlit server - so is quite secure. I'm definitely following OWASP best practice.
-
 - Given the refactoring, I added a simple factory for multiple provider implementations, so different persistence technologies could be used, for example a cloud DB.
-  - In fact, I built an Airtable cloud database provider which can replace SQLite as an alternative.
+  - In fact, I built an [Airtable](https://airtable.com) cloud database provider which can replace SQLite as an alternative.
 
 - The abstract provider interface is super simple and should allow _almost_ any database to be adapted, and it works fine for this specific auth use case in the implementations I created.
   - Some Streamliters have mentioned Google Sheets and Firebase - yep, they should be easy.
+
+- Passwords are stored hashed (MD5) & encrypted (AES256 CBC Extended) in the database, not as plain text. Note, the password is never sent to the
+browser - it's retrieved, decrypted and matched on the Streamlit server - so is quite secure. I'm definitely following OWASP best practice.
 
 - Configuration has been externalized for things like database names and locations, cloud service account secrets, api keys, etc. The configuration is managed in a root `.env` and `env.py` files, and small Python settings files for the main app (`app_settings.py`), and each provider implementation (`settings.py`).
 
@@ -159,12 +159,10 @@ That's it! You're ready now to use the admin application or Airtable directly to
 
 ## TODO
 
-Caveat emptor: you're free to use this solution at your own risk. I have a few more things to do:
-
-- Fix column and sort order in user table view from Airtable.
+Caveat emptor: You're free to use this solution at your own risk. I have a few features on my wish list:
 
 - In addition to *username*, *password*, and *su* I want to add additional useful user data to the database: *logged_in*, *expires_at*, *logins_count*, *last_login*, *created_at*, *updated_at*.
-
-- Provide a Streamlit component wrapper to make it easy to _pip install_ and also use this simple authentication within custom component implementations.
-
+- Provide a Streamlit component wrapper to make it easy to _pip install_ (`st_auth` maybe??)
+- JavaScript API library making it easy to use the authentication DB in custom component implementations.
+- Would be nice to enhace the library and make an Auth0 provider (leverage my [Auth0 component](https://github.com/asehmi/Data-Science-Meetup-Oxford/tree/master/StreamlitComponent)).
 - Deploy the demo app on [Streamlit sharing](https://share.streamlit.io/) and use it's secrets store instead of my `.env` solution.
