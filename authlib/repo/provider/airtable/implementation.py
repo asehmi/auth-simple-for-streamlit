@@ -63,14 +63,14 @@ class AirtableProvider(StorageProvider):
 
         logging.info(f"Query: {fields}, {conds}, {modifier}")
         try:
-            max_records = 100
+            max_records = 1000
             if modifier and modifier.startswith('LIMIT '):
                 max_records = int(modifier.replace('LIMIT ', ''))
             if fields == '*':
-                user_records = self.table.all(formula=conds, max_records=max_records)
+                user_records = self.table.all(formula=conds, sort=['username', 'su'], max_records=max_records)
             else:
                 fields = fields.replace(' ', '').split(',')
-                user_records = self.table.all(fields=fields, formula=conds, max_records=max_records)
+                user_records = self.table.all(fields=fields, formula=conds, sort=['username', 'su'], max_records=max_records)
             results = [record['fields'] for record in user_records]
             return results
         except Exception as ex:
