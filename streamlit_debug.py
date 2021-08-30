@@ -13,7 +13,8 @@ def set(flag: bool=False, wait_for_client=False, host='localhost', port=8765):
         if _DEBUG and not st.session_state.debugging:
             # https://code.visualstudio.com/docs/python/debugging
             import debugpy
-            debugpy.listen((host, port))
+            if not debugpy.is_client_connected():
+                debugpy.listen((host, port))
             if wait_for_client:
                 debugpy.wait_for_client() # Only include this line if you always want to manually attach the debugger
             # debugpy.breakpoint()
