@@ -2,7 +2,7 @@ import streamlit as st
 st.set_page_config(page_title="Simple Auth", layout="wide")
 
 import streamlit_debug
-streamlit_debug.set(flag=True, wait_for_client=True, host='localhost', port=8765)
+streamlit_debug.set(flag=False, wait_for_client=True, host='localhost', port=8765)
 
 import env
 env.verify()

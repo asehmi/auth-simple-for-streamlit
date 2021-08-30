@@ -4,14 +4,31 @@ st.set_page_config(page_title="Simple Auth", layout="wide")
 import streamlit_debug
 streamlit_debug.set(flag=False, wait_for_client=True, host='localhost', port=8765)
 
+from os import environ as osenv
 import env
 env.verify()
 
-about_airtable = st.sidebar.checkbox('Tell me about Airtable')
-if about_airtable:
-    expando = st.expander('Getting started with an Airtable database', expanded=True)
-    expando.info("Airtable **database creation** is not supported in this application.")
-    expando.markdown(
+import authlib.auth as auth
+
+airtable_info = st.empty()
+
+st.title('Database Admin')
+
+OPTIONS = ['SQLITE', 'AIRTABLE']
+idx = OPTIONS.index(osenv.get('STORAGE', 'SQLITE'))
+provider = st.sidebar.selectbox('Choose storage provider', OPTIONS, index=idx)
+
+try:
+    auth.override_env_storage_provider(provider)
+    auth.admin()
+except Exception as ex:
+    st.write('## Trapped exception')
+    st.error(str(ex))
+
+if provider == 'AIRTABLE' and st.sidebar.checkbox('Tell me about Airtable'):
+    airtable_info.expander('Getting started with an Airtable database', expanded=True)
+    airtable_info.info("Airtable **database creation** is not supported in this application.")
+    airtable_info.markdown(
         '''
         # Getting started with an Airtable database
         
@@ -62,10 +79,10 @@ if about_airtable:
         A full example (which includes SQLite settings) is available in `env.sample`.
 
         That's it! You're ready now to use the admin application or Airtable directly to manage the credentials of your users.
+
+        ---
+
         ''',
         unsafe_allow_html=True
     )
 
-import authlib.auth as auth
-st.title('Database Admin')
-auth.admin()

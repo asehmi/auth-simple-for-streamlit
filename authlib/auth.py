@@ -206,12 +206,22 @@ def _superuser_mode():
     modes[mode]()
 
 # ------------------------------------------------------------------------------
+# Allows storage provider to be overriden programmatically 
+
+def override_env_storage_provider(provider):
+    try:
+        assert(provider in ['SQLITE', 'AIRTABLE'])
+        global STORAGE
+        STORAGE = provider
+    except:
+        raise ValueError(f'Unkown provider `{provider}`')
+
+# ------------------------------------------------------------------------------
 # Service run from standalone admin app - allows (SQLite) DB to be created
 
 def admin():
-    st.error("Warning, superuser mode")
-    st.write("Use this mode to initialise authentication database")
-    if st.checkbox("Check to continue"):
+    st.warning("Warning, superuser mode")
+    if st.checkbox("I accept responsibility and understand this mode can be used to initialise and make changes to the authentication database"):
         from authlib.repo.storage_factory import StorageFactory
 
         global store

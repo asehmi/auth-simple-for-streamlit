@@ -1,4 +1,5 @@
 import streamlit as st
+import logging
 
 _DEBUG = False
 def set(flag: bool=False, wait_for_client=False, host='localhost', port=8765):
@@ -16,13 +17,16 @@ def set(flag: bool=False, wait_for_client=False, host='localhost', port=8765):
             if not debugpy.is_client_connected():
                 debugpy.listen((host, port))
             if wait_for_client:
+                logging.info(f'>>> Waiting for debug client attach... <<<')
                 debugpy.wait_for_client() # Only include this line if you always want to manually attach the debugger
+                logging.info(f'>>> ...attached! <<<')
             # debugpy.breakpoint()
             st.session_state.debugging = True
 
-            print(f'>>> Remote debugging activated (host={host}, port={port}) <<<')
+            logging.info(f'>>> Remote debugging activated (host={host}, port={port}) <<<')
         
         if not _DEBUG:
+            logging.info(f'>>> Remote debugging in NOT active <<<')
             st.session_state.debugging = False
     except:
         # Ignore... e.g. for cloud deployments
