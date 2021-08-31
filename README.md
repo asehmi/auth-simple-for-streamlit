@@ -4,9 +4,29 @@
 
 > Arvindra Sehmi, CloudOpti Ltd. | [Website](https://sehmiconscious.blogspot.com) | [LinkedIn](https://www.linkedin.com/in/asehmi/)
 
-> Updated: 25 August, 2021
+> Updated: 31 August, 2021
 
 ---
+
+**TL;DR:** This is a simple username/password login authentication solution using a backing database. Both SQLite and Airtable are supported.
+
+## Quick start
+
+To get started immediately with a SQLite database, follow these steps:
+
+1. Clone this repo
+2. Copy the sample environment settings file `env.sample` to `.env`
+3. Install requirements
+
+    > `pip install -r requirements.txt`
+
+4. Initialize the SQLite database and create some users (including at least one super user)
+
+    > `streamlit run admin.py`
+
+5. Finally, run the test application
+
+    > `streamlit run app.py`
 
 ## Introduction
 
