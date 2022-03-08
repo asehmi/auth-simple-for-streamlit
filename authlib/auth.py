@@ -144,7 +144,7 @@ def _create_user(name=const.BLANK, pwd=const.BLANK, is_su=False, mode='create'):
     st.subheader('Create user')
     username = st.text_input("Enter Username (required)", value=name)
     if mode == 'create':
-        password = st.text_input("Enter Password (required)", value=pwd)
+        password = st.text_input("Enter Password (required)", value=pwd, type='password')
     elif mode == 'edit':
         # Do not display password as DB stores them encrypted
         # Passwords will always be created anew in edit mode
