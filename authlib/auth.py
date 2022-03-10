@@ -6,7 +6,7 @@ import logging
 
 import streamlit as st
 
-from . import const, aes256cbcExtended, cookie_manager
+from . import const, aes256cbcExtended, CookieManager
 
 # ------------------------------------------------------------------------------
 # Globals
@@ -16,7 +16,7 @@ ENC_NONCE = osenv.get('ENC_NONCE')
 STORAGE = osenv.get('STORAGE', 'SQLITE')
 COOKIE_NAME = osenv.get('COOKIE_NAME')
 store = None
-
+cookie_manager = CookieManager()
 # ------------------------------------------------------------------------------
 
 # Wrapping session state in a function ensures that 'user' (or any attribute really) is
@@ -57,7 +57,7 @@ def requires_auth(fn):
 @requires_auth
 def logout():
     auth_state().user = None
-    cookie_manager().delete(COOKIE_NAME)
+    cookie_manager.delete(COOKIE_NAME)
 
 def authenticated():
     return auth_state().user != None
@@ -98,8 +98,8 @@ def _auth(sidebar=True, show_msgs=True):
     if auth_state().user == None:
 
         # cookie login
-        cookie_manager().get_all()
-        user_in_cookie = cookie_manager().get(cookie=COOKIE_NAME)
+        cookie_manager.get_all()
+        user_in_cookie = cookie_manager.get(cookie=COOKIE_NAME)
         if user_in_cookie:
             ctx={'fields': "*", 'conds': f"username=\"{user_in_cookie[const.USERNAME]}\""}
             data = store.query(context=ctx)
@@ -136,12 +136,12 @@ def _auth(sidebar=True, show_msgs=True):
         if auth_state().user[const.SU] == 1:
             if su_widget(f"Super users can edit user DB"):
                 _superuser_mode()
-        if cookie_manager().get(cookie=COOKIE_NAME):
+        if cookie_manager.get(cookie=COOKIE_NAME):
             if not remember_me_widget("Remember me", value=True):
-                cookie_manager().delete(COOKIE_NAME)
+                cookie_manager.delete(COOKIE_NAME)
         else:
             if remember_me_widget("Remember me", value=False):
-                cookie_manager().set(COOKIE_NAME, auth_state().user)
+                cookie_manager.set(COOKIE_NAME, auth_state().user)
 
     return auth_state().user[const.USERNAME] if auth_state().user != None else None
 
