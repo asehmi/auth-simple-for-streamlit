@@ -5,6 +5,7 @@ from functools import wraps
 import logging
 
 import streamlit as st
+import extra_streamlit_components as stx
 
 from . import const, aes256cbcExtended
 
@@ -14,9 +15,14 @@ ENC_PASSWORD = osenv.get('ENC_PASSWORD')
 ENC_NONCE = osenv.get('ENC_NONCE')
 
 STORAGE = osenv.get('STORAGE', 'SQLITE')
+COOKIE_NAME = osenv.get('COOKIE_NAME')
 store = None
 
 # ------------------------------------------------------------------------------
+
+@st.cache(allow_output_mutation=True)
+def get_manager():
+    return stx.CookieManager()
 
 # Wrapping session state in a function ensures that 'user' (or any attribute really) is
 # in the session state and, in my opinion, works better with Streamlit's execution model,
@@ -56,6 +62,7 @@ def requires_auth(fn):
 @requires_auth
 def logout():
     auth_state().user = None
+    get_manager().delete(COOKIE_NAME)
 
 def authenticated():
     return auth_state().user != None
@@ -87,12 +94,27 @@ def _auth(sidebar=True, show_msgs=True):
     header_widget = st.sidebar.subheader if sidebar else st.subheader
     username_widget = st.sidebar.text_input if sidebar else st.text_input
     password_widget = st.sidebar.text_input if sidebar else st.text_input
+    autologin_widget = st.sidebar.checkbox if sidebar else st.checkbox
     su_widget = st.sidebar.checkbox if sidebar else st.checkbox
     logout_widget = st.sidebar.button if sidebar else st.button
 
     header_widget('Authentication')
 
     if auth_state().user == None:
+
+        # cookie login
+        get_manager().get_all()
+        user_in_cookie = get_manager().get(cookie=COOKIE_NAME)
+        if user_in_cookie:
+            ctx={'fields': "*", 'conds': f"username=\"{user_in_cookie[const.USERNAME]}\""}
+            data = store.query(context=ctx)
+            user = data[0] if data else None
+            # After checking for the presence of a user name, encrypted passwords are compared with each other.
+            if user and user[const.PASSWORD] == user_in_cookie[const.PASSWORD]:
+                auth_state().user = user
+                set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
+                st.experimental_rerun()
+
         set_auth_message('Please log in', delay=None, show_msgs=True)
 
         username = username_widget("Enter username", value='')
@@ -119,6 +141,12 @@ def _auth(sidebar=True, show_msgs=True):
         if auth_state().user[const.SU] == 1:
             if su_widget(f"Super users can edit user DB"):
                 _superuser_mode()
+        if get_manager().get(cookie=COOKIE_NAME):
+            if not autologin_widget(f"Allow automatic login with cookies", value=True):
+                get_manager().delete(COOKIE_NAME)
+        else:
+            if autologin_widget(f"Allow automatic login with cookies", value=False):
+                get_manager().set(COOKIE_NAME, auth_state().user)
 
     return auth_state().user[const.USERNAME] if auth_state().user != None else None
 
