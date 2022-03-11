@@ -4,7 +4,7 @@
 
 > Arvindra Sehmi, CloudOpti Ltd. | [Website](https://sehmiconscious.blogspot.com) | [LinkedIn](https://www.linkedin.com/in/asehmi/)
 
-> Updated: 31 August, 2021
+> Updated: 11 March, 2022
 
 ---
 
@@ -63,6 +63,11 @@ browser - it's retrieved, decrypted and matched on the Streamlit server - so is 
 - There's just enough exception handling to allow you to get a handle on your own extension implementations.
 
 - I use `debugpy` for remote debugging support of Streamlit apps, and include a little module that makes it work better with Streamlit's execution reruns.
+
+## Contributions
+
+- Cookie support contributed by [@ch-saeki](https://github.com/ch-saeki) provides a `Remember me` feature at login.
+
 
 All code is published under [MIT license](./LICENSE), so feel free to make changes and please **fork the repo if you're making changes and submit pull requests**.
 
