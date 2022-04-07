@@ -14,6 +14,7 @@ osenv['BASE_DIR'] = BASE_DIR
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
+# ======== LOAD SECRET ENVIRONMENT VARS (from secrets.toml) ========
 elif "STORAGE" in st.secrets:
     for key, value in st.secrets:
         osenv[key] = value
