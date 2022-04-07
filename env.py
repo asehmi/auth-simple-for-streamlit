@@ -13,6 +13,9 @@ osenv['BASE_DIR'] = BASE_DIR
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
+elif "STORAGE" in st.secrets:
+    for key, value in st.secrets:
+        osenv[key] = value
 
 def verify():
     logging.info(f'>>> Environment loading status <<<')
