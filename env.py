@@ -2,6 +2,7 @@ import os
 from os import environ as osenv
 from dotenv import load_dotenv, find_dotenv
 import logging
+import streamlit as st
 
 # ======== GLOBAL SETTINGS ========
 
