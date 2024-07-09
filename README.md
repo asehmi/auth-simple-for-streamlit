@@ -2,9 +2,9 @@
 # Simple Authentication for Streamlit Apps
 > _A simple username/password database authentication solution for Streamlit_
 
-> Arvindra Sehmi, CloudOpti Ltd. | [Website](https://sehmiconscious.blogspot.com) | [LinkedIn](https://www.linkedin.com/in/asehmi/)
+> Arvindra Sehmi, CloudOpti Ltd. | [Website](https://sehmi-conscious.medium.com/about) | [LinkedIn](https://www.linkedin.com/in/asehmi/)
 
-> Updated: 11 March, 2022
+> Updated: 9 July, 2024
 
 ---
 
