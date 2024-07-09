@@ -48,7 +48,7 @@ def set_auth_message(msg, type=const.INFO, delay=0.5, show_msgs=True):
 def requires_auth(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if auth_state().user != None:
+        if auth_state().user is not None:
             return fn(*args, **kwargs)
         else:
             set_auth_message(f'{fn.__name__} requires authentication!')
@@ -60,7 +60,7 @@ def logout():
     cookie_manager.delete(COOKIE_NAME)
 
 def authenticated():
-    return auth_state().user != None
+    return auth_state().user is not None
 
 # ------------------------------------------------------------------------------
 # Main auth service
@@ -68,7 +68,7 @@ def authenticated():
 def _auth(sidebar=True, show_msgs=True):
 
     global store
-    if store == None:
+    if store is None:
         try:
             from authlib.repo.storage_factory import StorageFactory
 
@@ -95,7 +95,7 @@ def _auth(sidebar=True, show_msgs=True):
 
     header_widget('Authentication')
 
-    if auth_state().user == None:
+    if auth_state().user is None:
 
         # cookie login
         cookie_manager.get_all()
@@ -108,7 +108,7 @@ def _auth(sidebar=True, show_msgs=True):
             if user and user[const.PASSWORD] == user_in_cookie[const.PASSWORD]:
                 auth_state().user = user
                 set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
-                st.experimental_rerun()
+                st.rerun()
 
         set_auth_message('Please log in', delay=None, show_msgs=True)
 
@@ -125,16 +125,16 @@ def _auth(sidebar=True, show_msgs=True):
                 # Update user state, password is encrypted so secure
                 auth_state().user = user
                 set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
-                st.experimental_rerun()
+                st.rerun()
 
-    if auth_state().user != None:
+    if auth_state().user is not None:
         set_auth_message('Logged in', delay=None, show_msgs=True)
         if logout_widget('Logout'):
             logout()
             set_auth_message('Logging out...', type=const.WARNING, show_msgs=show_msgs)
-            st.experimental_rerun()
+            st.rerun()
         if auth_state().user[const.SU] == 1:
-            if su_widget(f"Super users can edit user DB"):
+            if su_widget("Super users can edit user DB"):
                 _superuser_mode()
         if cookie_manager.get(cookie=COOKIE_NAME):
             if not remember_me_widget("Remember me", value=True):
@@ -143,7 +143,7 @@ def _auth(sidebar=True, show_msgs=True):
             if remember_me_widget("Remember me", value=False):
                 cookie_manager.set(COOKIE_NAME, auth_state().user)
 
-    return auth_state().user[const.USERNAME] if auth_state().user != None else None
+    return auth_state().user[const.USERNAME] if auth_state().user is not None else None
 
 def auth(*args, **kwargs):
     with st.expander('Authentication', expanded=True):
@@ -236,7 +236,7 @@ def override_env_storage_provider(provider):
         assert(provider in ['SQLITE', 'AIRTABLE'])
         global STORAGE
         STORAGE = provider
-    except:
+    except Exception:
         raise ValueError(f'Unkown provider `{provider}`')
 
 # ------------------------------------------------------------------------------

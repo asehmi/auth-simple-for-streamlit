@@ -1,22 +1,22 @@
 import streamlit as st
+import env
+from authlib.auth import (
+    auth, 
+    authenticated,
+    # requires_auth
+)
+# from authlib.common import trace_activity
+
 st.set_page_config(page_title="Simple Auth", layout="wide")
 
-import streamlit_debug
-streamlit_debug.set(flag=False, wait_for_client=True, host='localhost', port=8765)
-
-import env
 env.verify()
-
-from authlib.auth import auth, authenticated, requires_auth
-from authlib.common import trace_activity
-
 user = auth(sidebar=True, show_msgs=True)
 
 st.title('Test App')
 if authenticated():
     st.success(f'`{user}` is authenticated')
 else:
-    st.warning(f'Not authenticated')
+    st.warning('Not authenticated')
 
 st.markdown(
 """

@@ -56,7 +56,7 @@ class SQLiteProvider(StorageProvider):
             con = sql.connect(file_uri, uri=True, check_same_thread=False)
         except sql.OperationalError as ex:
             raise DatabaseError({
-                "code": f"SQLite exception",
+                "code": "SQLite exception",
                 "description": f'`_create_database({db}, {db_name}, allow_db_create={allow_db_create})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)
@@ -97,7 +97,7 @@ class SQLiteProvider(StorageProvider):
             con.commit()
         except Exception as ex:
             raise DatabaseError({
-                "code": f"SQLite exception",
+                "code": "SQLite exception",
                 "description": f'`create_table({db_name}, {table_name}, {col_spec}, if_table_exists={if_table_exists})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)
@@ -111,7 +111,7 @@ class SQLiteProvider(StorageProvider):
             con.commit()
         except Exception as ex:
             raise DatabaseError({
-                "code": f"SQLite exception",
+                "code": "SQLite exception",
                 "description": f'`delete_table({db_name}, {table_name})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)
@@ -129,7 +129,7 @@ class SQLiteProvider(StorageProvider):
             self.con.close()
         except Exception as ex:
             raise DatabaseError({
-                "code": f"SQLite exception",
+                "code": "SQLite exception",
                 "description": f'Database: `{self.db_name}`\n`close_database()`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)
@@ -162,7 +162,7 @@ class SQLiteProvider(StorageProvider):
         except Exception as ex:
             self.close_database()
             raise DatabaseError({
-                "code": f"SQLite exception",
+                "code": "SQLite exception",
                 "description": f'Database: `{self.db_name}`\n`upsert({data})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)
@@ -192,7 +192,7 @@ class SQLiteProvider(StorageProvider):
         except Exception as ex:
             self.close_database()
             raise DatabaseError({
-                "code": f"SQLite exception",
+                "code": "SQLite exception",
                 "description": f'Database: `{self.db_name}`\n`query({fields}, {conds}, {modifier})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)
@@ -204,7 +204,7 @@ class SQLiteProvider(StorageProvider):
 
         conds = context['conds']
 
-        select = f"DELETE FROM USERS "
+        select = "DELETE FROM USERS "
         where = f"WHERE {conds} " if conds else "" 
 
         query = f'{select}{where}'.strip()
@@ -216,7 +216,7 @@ class SQLiteProvider(StorageProvider):
         except Exception as ex:
             self.close_database()
             raise DatabaseError({
-                "code": f"SQLite exception",
+                "code": "SQLite exception",
                 "description": f'Database: `{self.db_name}`\n`delete({conds})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)

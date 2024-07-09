@@ -15,7 +15,7 @@ class StorageFactory():
         pass
 
     @staticmethod
-    @st.cache(hash_funcs={sqlite3.Connection: _sqlite_hash_func}) # @st.singleton << not yet released
+    @st.cache_resource(hash_funcs={sqlite3.Connection: _sqlite_hash_func})
     def _sqlite_provider(allow_db_create=False, if_table_exists: Literal['ignore', 'recreate'] = 'ignore'):
         print(f'_sqlite_provider(allow_db_create={allow_db_create}, if_table_exists={if_table_exists})')
         from .provider.sqlite.implementation import SQLiteProvider
@@ -23,9 +23,9 @@ class StorageFactory():
         return provider
 
     @staticmethod
-    @st.cache(allow_output_mutation=True) # @st.singleton << not yet released
+    @st.cache_resource
     def _airtable_provider():
-        print(f'_airtable_provider()')
+        print('_airtable_provider()')
         from .provider.airtable.implementation import AirtableProvider
         provider = AirtableProvider()
         return provider

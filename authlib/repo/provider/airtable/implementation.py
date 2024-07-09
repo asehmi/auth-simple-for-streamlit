@@ -47,7 +47,7 @@ class AirtableProvider(StorageProvider):
         except Exception as ex:
             self.close_database()
             raise DatabaseError({
-                "code": f"Airtable exception",
+                "code": "Airtable exception",
                 "description": f'Database: `{self.db_name}`\n`upsert({data})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)
@@ -76,7 +76,7 @@ class AirtableProvider(StorageProvider):
         except Exception as ex:
             self.close_database()
             raise DatabaseError({
-                "code": f"Airtable exception",
+                "code": "Airtable exception",
                 "description": f'Database: `{self.db_name}`\n`query({fields}, {conds}, {modifier})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)
@@ -96,7 +96,7 @@ class AirtableProvider(StorageProvider):
         except Exception as ex:
             self.close_database()
             raise DatabaseError({
-                "code": f"Airtable exception",
+                "code": "Airtable exception",
                 "description": f'Database: `{self.db_name}`\n`delete({conds})`\nEnsure DB entities exist',
                 "message": str(ex),
             }, 500)

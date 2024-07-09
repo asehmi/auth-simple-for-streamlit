@@ -4,13 +4,16 @@ import extra_streamlit_components as stx
 
 class CookieManager():
 
+    instance = None
+    
     def __init__(self):
         pass
 
     @staticmethod
-    @st.experimental_singleton
     def get_manager():
-        return stx.CookieManager()
+        if not CookieManager.instance:
+            CookieManager.instance = stx.CookieManager(key="cookie_manager")
+        return CookieManager.instance
 
     def get(self, cookie: str):
         return CookieManager.get_manager().get(cookie)

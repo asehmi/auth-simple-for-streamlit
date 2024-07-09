@@ -1,14 +1,10 @@
 import streamlit as st
-st.set_page_config(page_title="Simple Auth", layout="wide")
-
-import streamlit_debug
-streamlit_debug.set(flag=False, wait_for_client=True, host='localhost', port=8765)
-
 from os import environ as osenv
-import env
-env.verify()
 
 import authlib.auth as auth
+import env
+
+env.verify()
 
 airtable_info = st.empty()
 

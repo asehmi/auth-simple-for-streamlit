@@ -1,16 +1,19 @@
-from datetime import datetime
+import datetime as dt
 
-def dt_to_str(dt):
-    return str(dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+# default ISO format
+def dt_to_str(dt: dt.datetime, format='%Y-%m-%dT%H:%M:%S.%fZ') -> str:
+    return str(dt.strftime(format))
 
-def tnow_iso():
-    return datetime.now()
+# default ISO format
+def dt_from_str(dt_str: str, format='%Y-%m-%dT%H:%M:%S.%fZ') -> dt.datetime:
+    return dt.datetime.strptime(dt_str, format)
 
-def tnow_iso_str():
-    return dt_to_str(datetime.now())
+def dt_from_ts(ts: float) -> dt.datetime:
+    return dt.datetime.fromtimestamp(int(ts))
 
-def dt_from_str(dt_str):
-    return datetime.strptime(dt_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+def tnow_iso() -> dt.datetime:
+    return dt.datetime.now()
 
-def dt_from_ts(ts):
-    return datetime.fromtimestamp(int(ts))
+def tnow_iso_str() -> str:
+    return dt_to_str(dt.datetime.now())
+
