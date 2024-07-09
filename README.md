@@ -62,7 +62,7 @@ browser - it's retrieved, decrypted and matched on the Streamlit server - so is 
 
 - There's just enough exception handling to allow you to get a handle on your own extension implementations.
 
-- I use `debugpy` for remote debugging support of Streamlit apps, and include a little module that makes it work better with Streamlit's execution reruns.
+- I use `debugpy` for debugging Streamlit apps, and include my vs-code `launch.json` file.
 
 ## Contributions
 
@@ -135,7 +135,6 @@ A full example (which includes Airtable and encryption key settings) is availabl
 ### How to create an Airtable
 
 1. First, login into or create a (free) [**Airtable account**](https://airtable.com/account).
-
 2. Next, follow these steps to create an Airtable:
 
 - Create a database (referred to as a _base_ in Airtable) and a table within the base.
@@ -146,19 +145,19 @@ A full example (which includes Airtable and encryption key settings) is availabl
 
 ### Finding your Airtable settings
 
-1. You can initially create and then manage your API key in the 'Account' overview area
+1. You must initially create and then manage your Personal access token the 'Account' overview area
 2. For your base (e.g. `profile`) go to the 'Help menu' and select 'API documentation'
 3. In 'API documentation' select 'METADATA'
-4. Check 'show API key' in the code examples panel, and you will see something like this:
+4. In the `curl` example you will see the `appv------X-----c` and reference to `YOUR_SECRET_API_TOKEN` values
 
-```bash
-EXAMPLE USING QUERY PARAMETER
-$ curl https://api.airtable.com/v0/appv------X-----c/users?api_key=keyc------X-----i
-```
-
-- `keyc------X-----i` is your 'API_KEY' (also in your 'Account' area)
-- `appv------X-----c` is your 'BASE_ID',
-- `users` will be your 'TABLE_NAME'
+    ```bash
+    $ curl https://api.airtable.com/v0/appv---X---c/users -H "Authorization: Bearer YOUR_SECRET_API_TOKEN"
+    ```
+    
+    - `YOUR_SECRET_API_TOKEN` is your Personal access token which you should create in the [Developer Hub](https://airtable.com/create/tokens),
+    - `YOUR_SECRET_API_TOKEN` is your 'AIRTABLE_PAT',
+    - `appv------X-----c` is your 'AIRTABLE_BASE_KEY',
+    - `users` will be your 'USERS_TABLE'
 
 ### Configuring Airtable's app settings 
 
@@ -173,12 +172,12 @@ For example:
 STORAGE='AIRTABLE'
 
 # Airtable account
-AIRTABLE_API_KEY='keyc------X-----i'
-AIRTABLE_PROFILE_BASE_ID = 'appv------X-----c'
+AIRTABLE_PAT = 'pat---X---e'
+AIRTABLE_BASE_KEY = 'app---X---c'
 USERS_TABLE = 'users'
 ```
 
-A full example (which includes SQLite and encryption key settings) is available in `env.sample`.
+A full example (which includes SQLite settings) is available in `env.sample`.
 
 That's it! You're ready now to use the admin application or Airtable directly to manage the credentials of your users.
 
@@ -189,5 +188,5 @@ Caveat emptor: You're free to use this solution at your own risk. I have a few f
 - In addition to *username*, *password*, and *su* I want to add additional useful user data to the database: *logged_in*, *expires_at*, *logins_count*, *last_login*, *created_at*, *updated_at*.
 - Provide a Streamlit component wrapper to make it easy to _pip install_ (`st_auth` maybe??)
 - JavaScript API library making it easy to use the authentication DB in custom component implementations.
-- Would be nice to enhace the library and make an Auth0 provider (leverage my [Auth0 component](https://github.com/asehmi/Data-Science-Meetup-Oxford/tree/master/StreamlitComponent)).
+- Would be nice to enhace the library and make an Auth0 provider (leverage my [Auth0 component](https://auth0.com/blog/streamlit-user-and-api-authentication/)).
 - Deploy the demo app on [Streamlit sharing](https://share.streamlit.io/) and use it's secrets store instead of my `.env` solution.
