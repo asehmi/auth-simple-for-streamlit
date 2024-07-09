@@ -1,13 +1,11 @@
-import streamlit as st
-import env
-from authlib.auth import (
-    auth, 
-    authenticated,
-    # requires_auth
-)
-# from authlib.common import trace_activity
+import env # noqa
 
+import streamlit as st
+# Must be called before importing authlib.auth, which is also a Streamlit file
 st.set_page_config(page_title="Simple Auth", layout="wide")
+
+from authlib.auth import (auth, authenticated, requires_auth) # noqa
+# from authlib.common import trace_activity
 
 env.verify()
 user = auth(sidebar=True, show_msgs=True)

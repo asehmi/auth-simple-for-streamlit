@@ -5,6 +5,7 @@ from functools import wraps
 import logging
 
 import streamlit as st
+from streamlit import session_state as state
 
 from . import const, aes256cbcExtended, CookieManager
 
@@ -23,9 +24,9 @@ cookie_manager = CookieManager()
 # in the session state and, in my opinion, works better with Streamlit's execution model,
 # e.g. if state is deleted from cache, it'll be auto-initialized when the function is called
 def auth_state():
-    if 'user' not in st.session_state:
-        st.session_state.user = None
-    return st.session_state
+    if 'user' not in state:
+        state.user = None
+    return state
 
 auth_message = st.empty()
 def set_auth_message(msg, type=const.INFO, delay=0.5, show_msgs=True):
@@ -81,7 +82,8 @@ def _auth(sidebar=True, show_msgs=True):
             logging.warning(f">>> Storage exception <<<\n`{str(ex)}`")
             store = None
             set_auth_message(
-                "Auth DB Not Found. Consider running admin script in standalone mode to generate it.",
+                "Auth DB Not Found. Consider running admin script in standalone mode to generate it."
+                "\n\nFor Airtable, ensure the `users` table exists and access settings are correct." if STORAGE == 'AIRTABLE' else "",
                 type=const.WARNING,
                 show_msgs=True
             )
@@ -101,7 +103,7 @@ def _auth(sidebar=True, show_msgs=True):
         cookie_manager.get_all()
         user_in_cookie = cookie_manager.get(cookie=COOKIE_NAME)
         if user_in_cookie:
-            ctx={'fields': "*", 'conds': f"username=\"{user_in_cookie[const.USERNAME]}\""}
+            ctx={'fields': "*", 'conds': f"{const.USERNAME}=\"{user_in_cookie[const.USERNAME]}\""}
             data = store.query(context=ctx)
             user = data[0] if data else None
             # After checking for the presence of a user name, encrypted passwords are compared with each other.
@@ -155,10 +157,11 @@ def auth(*args, **kwargs):
 @requires_auth
 def _list_users():
     st.subheader('List users')
-    ctx = {'fields': "username, password, su"}
+    ctx = {'fields': f"{const.USERNAME}, {const.PASSWORD}, {const.SU}"}
     data = store.query(context=ctx)
     if data:
-        st.table(data)
+        display_data = [{const.USERNAME: row[const.USERNAME], const.PASSWORD: row[const.PASSWORD], const.SU: row[const.SU]} for row in data]
+        st.table(display_data)
     else:
         st.write("`No entries in authentication database`")
 
@@ -182,19 +185,19 @@ def _create_user(name=const.BLANK, pwd=const.BLANK, is_su=False, mode='create'):
             st.write("`Database NOT Updated` (enter a password)")
             return
         # TODO: user_id, password, logged_in, expires_at, logins_count, last_login, created_at, updated_at, su
-        ctx = {'data': {"username": f"{username}", "password": f"{encrypted_password}", "su": su}}
+        ctx = {'data': {const.USERNAME: f"{username}", const.PASSWORD: f"{encrypted_password}", const.SU: su}}
         store.upsert(context=ctx)
         st.write("`Database Updated`")
 
 @requires_auth
 def _edit_user():
     st.subheader('Edit user')
-    ctx = {'fields': "username"}
+    ctx = {'fields': const.USERNAME}
     userlist = [row[const.USERNAME] for row in store.query(context=ctx)]
     userlist.insert(0, "")
     username = st.selectbox("Select user", options=userlist)
     if username:
-        ctx = {'fields': "username, password, su", 'conds': f"username=\"{username}\""}
+        ctx = {'fields': f"{const.USERNAME}, {const.PASSWORD}, {const.SU}", 'conds': f"{const.USERNAME}=\"{username}\""}
         user_data = store.query(context=ctx)
         _create_user(
             name=user_data[0][const.USERNAME],
@@ -206,13 +209,13 @@ def _edit_user():
 @requires_auth
 def _delete_user():
     st.subheader('Delete user')
-    ctx = {'fields': "username"}
+    ctx = {'fields': const.USERNAME}
     userlist = [row[const.USERNAME] for row in store.query(context=ctx)]
     userlist.insert(0, "")
     username = st.selectbox("Select user", options=userlist)
     if username:
         if st.button(f"Remove {username}"):
-            ctx = {'conds': f"username=\"{username}\""}
+            ctx = {'conds': f"{const.USERNAME}=\"{username}\""}
             store.delete(context=ctx)
             st.write(f"`User {username} deleted`")
 
@@ -225,7 +228,7 @@ def _superuser_mode():
         "Edit": _edit_user,
         "Delete": _delete_user,
     }
-    mode = st.radio("Select mode", modes.keys())
+    mode = st.radio("Select mode", modes.keys(), horizontal=True)
     modes[mode]()
 
 # ------------------------------------------------------------------------------
@@ -251,5 +254,5 @@ def admin():
         store = StorageFactory().get_provider(STORAGE, allow_db_create=True, if_table_exists='ignore')
 
         # Fake the admin user token to enable superuser mode (password field isn't required)
-        auth_state().user = {'username': 'admin', 'su': 1}
+        auth_state().user = {const.USERNAME: 'admin', const.SU: 1}
         _superuser_mode()
