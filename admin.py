@@ -3,7 +3,8 @@ from os import environ as osenv
 import streamlit as st
 st.set_page_config(page_title="Simple Auth Admin", layout="wide")
 
-import authlib.auth as auth # noqa
+# Import from st-auth-simple package
+import st_auth_simple as auth  # noqa
 import env # noqa
 
 env.verify()

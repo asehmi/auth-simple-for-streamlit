@@ -1,28 +1,72 @@
+"""
+CookieManager class for handling browser cookies using Streamlit's custom components.
+Provides a simple interface for setting, getting, and deleting cookies.
+"""
+
 import datetime
-import extra_streamlit_components as stx
+import json
+from .cookie_component import CookieComponent
 
-class CookieManager():
 
-    instance = None
-    
+class CookieManager:
+    """
+    Manages browser cookies using Streamlit's st.components.v2.
+    Provides a simple interface for cookie operations without external dependencies.
+    """
+
     def __init__(self):
+        """Initialize the CookieManager."""
         pass
 
-    @staticmethod
-    def get_manager():
-        if not CookieManager.instance:
-            CookieManager.instance = stx.CookieManager(key="cookie_manager")
-        return CookieManager.instance
+    def set(self, cookie: str, val, expires_at=None) -> None:
+        """
+        Set a cookie with optional expiration date.
+
+        Args:
+            cookie: Cookie name
+            val: Cookie value (can be dict or string)
+            expires_at: Expiration datetime (default: 30 days from now)
+        """
+        if expires_at is None:
+            expires_at = datetime.datetime.now() + datetime.timedelta(days=30)
+
+        # Convert dict to JSON string if needed
+        cookie_value = json.dumps(val) if isinstance(val, dict) else str(val)
+
+        CookieComponent.set_cookie(cookie, cookie_value, expires_at)
 
     def get(self, cookie: str):
-        return CookieManager.get_manager().get(cookie)
+        """
+        Get a cookie value by name.
 
-    def set(self, cookie, val, expires_at=datetime.datetime.now() + datetime.timedelta(days=1),
-            key="set"):
-        return CookieManager.get_manager().set(cookie=cookie, val=val, expires_at=expires_at, key=key)
+        Args:
+            cookie: Cookie name
 
-    def delete(self, cookie, key="delete"):
-        return CookieManager.get_manager().delete(cookie=cookie, key=key)
+        Returns:
+            Cookie value (dict if JSON, string otherwise) or None if not found
+        """
+        value = CookieComponent.get_cookie(cookie)
+        if value:
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return value
+        return None
 
-    def get_all(self, key="get_all"):
-        return CookieManager.get_manager().get_all()
+    def delete(self, cookie: str) -> None:
+        """
+        Delete a cookie by name.
+
+        Args:
+            cookie: Cookie name to delete
+        """
+        CookieComponent.delete_cookie(cookie)
+
+    def get_all(self) -> dict:
+        """
+        Get all cookies as a dictionary.
+
+        Returns:
+            Dictionary of all cookies
+        """
+        return CookieComponent.get_all_cookies()

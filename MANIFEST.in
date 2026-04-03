@@ -1,0 +1,13 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include setup.py
+include setup.cfg
+recursive-include st_auth_simple *.py
+recursive-include authlib *.py
+recursive-exclude st_auth_simple __pycache__
+recursive-exclude authlib __pycache__
+recursive-exclude st_auth_simple *.pyc
+recursive-exclude authlib *.pyc
+recursive-exclude st_auth_simple *.pyo
+recursive-exclude authlib *.pyo

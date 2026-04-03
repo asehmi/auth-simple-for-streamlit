@@ -1,10 +1,11 @@
 import env # noqa
 
 import streamlit as st
-# Must be called before importing authlib.auth, which is also a Streamlit file
+# Must be called before importing st_auth_simple, which is also a Streamlit file
 st.set_page_config(page_title="Simple Auth", layout="wide")
 
-from authlib.auth import (auth, authenticated, requires_auth) # noqa
+# Import from st-auth-simple package
+from st_auth_simple import auth, authenticated, requires_auth  # noqa
 # from authlib.common import trace_activity
 
 env.verify()

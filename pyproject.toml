@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "st-auth-simple"
+version = "1.0.0"
+description = "Simple username/password authentication for Streamlit apps with pluggable storage backends"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Arvindra Sehmi", email = "asehmi@cloudopti.io"}
+]
+maintainers = [
+    {name = "Arvindra Sehmi", email = "asehmi@cloudopti.io"}
+]
+keywords = ["streamlit", "authentication", "auth", "login", "security"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "streamlit>=1.56.0",
+    "pycryptodome>=3.23.0",
+]
+
+[project.optional-dependencies]
+airtable = [
+    "pyairtable>=3.3.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=22.0",
+    "flake8>=4.0",
+    "mypy>=0.960",
+]
+all = [
+    "st-auth-simple[airtable,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/asehmi/auth-simple-for-streamlit"
+Documentation = "https://github.com/asehmi/auth-simple-for-streamlit#readme"
+Repository = "https://github.com/asehmi/auth-simple-for-streamlit.git"
+Issues = "https://github.com/asehmi/auth-simple-for-streamlit/issues"
+
+[tool.setuptools]
+packages = ["st_auth_simple", "authlib", "authlib.common", "authlib.repo",
+            "authlib.repo.provider", "authlib.repo.provider.sqlite",
+            "authlib.repo.provider.airtable"]
+
+[tool.setuptools.package-data]
+authlib = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "--cov=authlib --cov-report=html --cov-report=term-missing"

@@ -15,7 +15,7 @@ ENC_PASSWORD = osenv.get('ENC_PASSWORD')
 ENC_NONCE = osenv.get('ENC_NONCE')
 
 STORAGE = osenv.get('STORAGE', 'SQLITE')
-COOKIE_NAME = osenv.get('COOKIE_NAME')
+COOKIE_NAME = osenv.get('COOKIE_NAME', 'st-auth-simple')
 store = None
 cookie_manager = CookieManager()
 # ------------------------------------------------------------------------------
@@ -59,6 +59,7 @@ def requires_auth(fn):
 def logout():
     auth_state().user = None
     cookie_manager.delete(COOKIE_NAME)
+    st.rerun()
 
 def authenticated():
     return auth_state().user is not None
@@ -66,16 +67,103 @@ def authenticated():
 # ------------------------------------------------------------------------------
 # Main auth service
 
-def _auth(sidebar=True, show_msgs=True):
+def _try_cookie_login():
+    """
+    Attempt to authenticate from browser cookie.
+    Returns True if successful, False otherwise.
+    """
+    user_in_cookie = cookie_manager.get(cookie=COOKIE_NAME)
+    if not user_in_cookie:
+        return False
 
+    # Validate cookie data against database
+    ctx = {'fields': "*", 'conds': f"{const.USERNAME}=\"{user_in_cookie[const.USERNAME]}\""}
+    data = store.query(context=ctx)
+    user = data[0] if data else None
+
+    if user and user[const.PASSWORD] == user_in_cookie[const.PASSWORD]:
+        # Cookie is valid
+        auth_state().user = user
+        set_auth_message('Auto-logged in', type=const.SUCCESS, show_msgs=True)
+        st.rerun()
+        return True
+    else:
+        # Cookie is invalid/expired - delete it
+        cookie_manager.delete(COOKIE_NAME)
+        return False
+
+
+def _show_login_form(sidebar, show_msgs):
+    """Display and handle the login form."""
+    set_auth_message('Please log in', delay=None, show_msgs=True)
+
+    # Render form in sidebar or main area based on sidebar flag
+    form_location = st.sidebar if sidebar else st
+    with form_location:
+        with st.form("login_form", border=True):
+            username = st.text_input("Username", value='')
+            password = st.text_input("Password", type="password")
+            remember_me = st.checkbox("Remember me", value=False)
+            submit_button = st.form_submit_button("Login", type="primary", use_container_width=False)
+
+    # Handle form submission
+    if submit_button and username and password:
+        _handle_login_submission(username, password, remember_me, show_msgs)
+
+
+def _handle_login_submission(username, password, remember_me, show_msgs):
+    """Validate credentials and log user in."""
+    # Look up user
+    ctx = {'fields': "*", 'conds': f"username=\"{username}\""}
+    data = store.query(context=ctx)
+    user = data[0] if data else None
+
+    if not user:
+        set_auth_message('User not found', type=const.ERROR, show_msgs=True)
+        return
+
+    # Verify password
+    decrypted_password = aes256cbcExtended(ENC_PASSWORD, ENC_NONCE).decrypt(user[const.PASSWORD])
+    if password != decrypted_password:
+        set_auth_message('Invalid password', type=const.ERROR, show_msgs=True)
+        return
+
+    # Login successful
+    auth_state().user = user
+    if remember_me:
+        cookie_manager.set(COOKIE_NAME, user)
+    set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
+    st.rerun()
+
+
+def _show_logged_in_ui(sidebar):
+    """Display UI for authenticated users."""
+    su_widget = st.sidebar.checkbox if sidebar else st.checkbox
+    logout_widget = st.sidebar.button if sidebar else st.button
+
+    set_auth_message('Logged in', delay=None, show_msgs=True)
+
+    if logout_widget('Logout'):
+        logout()  # logout() calls st.rerun() internally
+
+    if auth_state().user[const.SU] == 1:
+        if su_widget("Super users can edit user DB"):
+            _superuser_mode()
+
+
+def _auth(sidebar=True, show_msgs=True):
+    """
+    Main authentication function.
+    Flow: Check if authenticated -> Try cookie login -> Show login form
+    """
     global store
+
+    # Initialize storage provider
     if store is None:
         try:
             from authlib.repo.storage_factory import StorageFactory
 
-            # get the store
             store = StorageFactory().get_provider(STORAGE, allow_db_create=False, if_table_exists='ignore')
-            # check the table
             ctx = {'fields': "*", 'modifier': "LIMIT 1"}
             store.query(context=ctx)
         except Exception as ex:
@@ -88,62 +176,21 @@ def _auth(sidebar=True, show_msgs=True):
                 show_msgs=True
             )
 
+    # Show authentication header
     header_widget = st.sidebar.subheader if sidebar else st.subheader
-    username_widget = st.sidebar.text_input if sidebar else st.text_input
-    password_widget = st.sidebar.text_input if sidebar else st.text_input
-    remember_me_widget = st.sidebar.checkbox if sidebar else st.checkbox
-    su_widget = st.sidebar.checkbox if sidebar else st.checkbox
-    logout_widget = st.sidebar.button if sidebar else st.button
-
     header_widget('Authentication')
 
-    if auth_state().user is None:
-
-        # cookie login
-        cookie_manager.get_all()
-        user_in_cookie = cookie_manager.get(cookie=COOKIE_NAME)
-        if user_in_cookie:
-            ctx={'fields': "*", 'conds': f"{const.USERNAME}=\"{user_in_cookie[const.USERNAME]}\""}
-            data = store.query(context=ctx)
-            user = data[0] if data else None
-            # After checking for the presence of a user name, encrypted passwords are compared with each other.
-            if user and user[const.PASSWORD] == user_in_cookie[const.PASSWORD]:
-                auth_state().user = user
-                set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
-                st.rerun()
-
-        set_auth_message('Please log in', delay=None, show_msgs=True)
-
-        username = username_widget("Enter username", value='')
-
-        ctx={'fields': "*", 'conds': f"username=\"{username}\""}
-        data = store.query(context=ctx)
-        user = data[0] if data else None
-        if user:
-            decrypted_password = aes256cbcExtended(ENC_PASSWORD, ENC_NONCE).decrypt(user[const.PASSWORD])
-            password = password_widget("Enter password", type="password")
-            if password == decrypted_password:
-                # TODO: set active state and other fields then update DB
-                # Update user state, password is encrypted so secure
-                auth_state().user = user
-                set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
-                st.rerun()
-
+    # Check if already authenticated
     if auth_state().user is not None:
-        set_auth_message('Logged in', delay=None, show_msgs=True)
-        if logout_widget('Logout'):
-            logout()
-            set_auth_message('Logging out...', type=const.WARNING, show_msgs=show_msgs)
-            st.rerun()
-        if auth_state().user[const.SU] == 1:
-            if su_widget("Super users can edit user DB"):
-                _superuser_mode()
-        if cookie_manager.get(cookie=COOKIE_NAME):
-            if not remember_me_widget("Remember me", value=True):
-                cookie_manager.delete(COOKIE_NAME)
-        else:
-            if remember_me_widget("Remember me", value=False):
-                cookie_manager.set(COOKIE_NAME, auth_state().user)
+        _show_logged_in_ui(sidebar)
+        return auth_state().user[const.USERNAME]
+
+    # Try to auto-login from cookie
+    if _try_cookie_login():
+        return auth_state().user[const.USERNAME]
+
+    # Show login form
+    _show_login_form(sidebar, show_msgs)
 
     return auth_state().user[const.USERNAME] if auth_state().user is not None else None
 
