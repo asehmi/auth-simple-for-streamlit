@@ -1,5 +1,5 @@
 """
-Cookie management using Streamlit's st.html() and st.context.cookies
+Cookie management using Streamlit's st.context.cookies and st.html()
 Provides browser cookie handling with read/write access.
 """
 

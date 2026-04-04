@@ -1,5 +1,6 @@
 USERNAME        = 'username'
 PASSWORD        = 'password'
+AUTH_TOKEN      = 'auth_token'
 UPDATED_AT      = 'updated_at'
 EXPIRES_AT      = 'expires_at'
 CREATED_AT      = 'created_at'

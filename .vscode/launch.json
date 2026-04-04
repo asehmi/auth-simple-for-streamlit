@@ -13,11 +13,11 @@
             "args": []
         },
         {
-            "name": "Python Streamlit",
+            "name": "Python Streamlit APP",
             "type": "debugpy",
             "request": "launch",
             "module": "streamlit",
-            "args": ["run", "--server.port", "8787", "${file}"],
+            "args": ["run", "--server.port", "8787", "app.py"],
             "justMyCode": true,
             "redirectOutput": true,
             "logToFile": true,

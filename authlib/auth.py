@@ -8,6 +8,7 @@ import streamlit as st
 from streamlit import session_state as state
 
 from . import const, aes256cbcExtended, CookieManager
+from .auth_session import AuthSession
 
 # ------------------------------------------------------------------------------
 # Globals
@@ -26,6 +27,8 @@ cookie_manager = CookieManager()
 def auth_state():
     if 'user' not in state:
         state.user = None
+    if 'skip_cookie_login' not in state:
+        state.skip_cookie_login = False
     return state
 
 auth_message = st.empty()
@@ -57,8 +60,17 @@ def requires_auth(fn):
 
 @requires_auth
 def logout():
+    # Clear server-side token from database
+    if auth_state().user and const.USERNAME in auth_state().user:
+        AuthSession.clear_session(store, auth_state().user[const.USERNAME])
+
+    # Clear session state
     auth_state().user = None
+    auth_state().skip_cookie_login = True  # Skip auto-login on this rerun only
+
+    # Clear browser cookie
     cookie_manager.delete(COOKIE_NAME)
+
     st.rerun()
 
 def authenticated():
@@ -69,26 +81,28 @@ def authenticated():
 
 def _try_cookie_login():
     """
-    Attempt to authenticate from browser cookie.
+    Attempt to authenticate from server-side session token.
     Returns True if successful, False otherwise.
     """
-    user_in_cookie = cookie_manager.get(cookie=COOKIE_NAME)
-    if not user_in_cookie:
+    # Skip if user just logged out
+    if auth_state().skip_cookie_login:
+        auth_state().skip_cookie_login = False
         return False
 
-    # Validate cookie data against database
-    ctx = {'fields': "*", 'conds': f"{const.USERNAME}=\"{user_in_cookie[const.USERNAME]}\""}
-    data = store.query(context=ctx)
-    user = data[0] if data else None
+    # Get token from browser cookie
+    token = cookie_manager.get(cookie=COOKIE_NAME)
+    if not token:
+        return False
 
-    if user and user[const.PASSWORD] == user_in_cookie[const.PASSWORD]:
-        # Cookie is valid
+    # Validate token against database (token is looked up in DB, user data returned)
+    user = AuthSession.validate_session(store, token)
+    if user:
         auth_state().user = user
         set_auth_message('Auto-logged in', type=const.SUCCESS, show_msgs=True)
         st.rerun()
         return True
     else:
-        # Cookie is invalid/expired - delete it
+        # Invalid/expired token
         cookie_manager.delete(COOKIE_NAME)
         return False
 
@@ -130,8 +144,12 @@ def _handle_login_submission(username, password, remember_me, show_msgs):
 
     # Login successful
     auth_state().user = user
+
+    # If "Remember me" checked, create server-side session token
     if remember_me:
-        cookie_manager.set(COOKIE_NAME, user)
+        token = AuthSession.create_session(store, user, expires_in_days=30)
+        cookie_manager.set(COOKIE_NAME, token)  # Store only the token, not user data
+
     set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
     st.rerun()
 

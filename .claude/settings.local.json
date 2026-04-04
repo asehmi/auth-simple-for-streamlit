@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip index:*)",
+      "Bash(pip install:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(python -c \"from authlib.auth import auth, authenticated, requires_auth; import authlib.auth as auth_module; print\\('✓ app.py imports verified'\\); print\\('✓ admin.py imports verified'\\)\")",
+      "Bash(python -c \"from authlib.auth import auth, authenticated, requires_auth; import authlib.auth as auth_module; print\\('PASS: app.py imports verified'\\); print\\('PASS: admin.py imports verified'\\)\")",
+      "Bash(python -c \"from st_auth_simple import auth, authenticated, requires_auth, logout, admin, override_env_storage_provider; print\\('SUCCESS: st_auth_simple imports working'\\); print\\('Available exports: auth, authenticated, requires_auth, logout, admin, override_env_storage_provider'\\)\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, 'C:/Dev/streamlit/auth-simple-for-streamlit'\\); from app import *; print\\('SUCCESS: app.py imports verified'\\)\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, 'C:/Dev/streamlit/auth-simple-for-streamlit'\\); import admin; print\\('SUCCESS: admin.py imports verified'\\)\")",
+      "Bash(python -c \"from authlib.common import CookieManager; cm = CookieManager\\(\\); print\\('CookieManager imported successfully'\\); print\\(f'Methods: set, get, delete, get_all'\\)\")",
+      "Bash(python -c \"from st_auth_simple import auth, authenticated, requires_auth, logout; from authlib.common import CookieManager; print\\('All imports successful'\\); print\\('Package dependencies reduced: extra-streamlit-components removed'\\)\")",
+      "Bash(python -c \"from authlib.common.cookie_component import CookieComponent; print\\('CookieComponent imported successfully'\\)\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(session\")"
+    ]
+  }
+}
