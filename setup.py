@@ -26,7 +26,7 @@ setup(
     python_requires=">=3.8",
     author="Arvindra Sehmi",
     author_email="asehmi@cloudopti.io",
-    description="Simple username/password authentication for Streamlit apps with pluggable storage backends",
+    description="Simple username/password authentication for Streamlit apps with pluggable storage backends (includes optional email signup)",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/asehmi/auth-simple-for-streamlit",

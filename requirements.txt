@@ -1,4 +1,5 @@
-pyairtable>=3.3.0
 streamlit>=1.56.0
 pycryptodome>=3.23.0
 python-dotenv>=1.0.1
+sendgrid>=6.11.0
+pyairtable>=3.3.0
