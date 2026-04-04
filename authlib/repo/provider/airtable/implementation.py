@@ -22,8 +22,8 @@ class User(Model):
     su = fields.IntegerField("su")
 
     def __repr__(self):
-        return { 
-            "username": self.username, 
+        return {
+            "username": self.username,
             "password": self.password,
             "su": str(self.su)
         }
@@ -41,7 +41,7 @@ class User(Model):
         assert(username is not None)
         assert(password is not None)
         assert(su is not None)
-        
+
         try:
             user = cls(
                 username = username,
@@ -83,45 +83,81 @@ class User(Model):
         typecast = True
 
 # ------------------------------------------------------------------------------
+# PENDING USER (for signup flow)
+
+class PendingUser(Model):
+    username = fields.TextField('username')
+    password = fields.TextField('password')
+    validation_pin = fields.TextField('validation_pin')
+    is_validated = fields.IntegerField('is_validated')
+    expires_at = fields.TextField('expires_at')
+
+    def to_dict(self):
+        return {
+            "username": self.username,
+            "password": self.password,
+            "validation_pin": self.validation_pin,
+            "is_validated": self.is_validated,
+            "expires_at": self.expires_at,
+        }
+
+    class Meta:
+        base_id = AIRTABLE_SETTINGS.BASE_ID
+        table_name = AIRTABLE_SETTINGS.PENDING_USERS_TABLE
+        api_key = AIRTABLE_SETTINGS.API_PAT
+        timeout = (5, 5)
+        typecast = True
+
+# ------------------------------------------------------------------------------
 
 class AirtableProvider(StorageProvider):
 
     def __init__(self, allow_db_create=False, if_table_exists: Literal['ignore', 'recreate'] = 'ignore'):
 
         logging.info('>>> AirtbleProvider: ignoring `allow_db_create` and `if_table_exists` args. <<<')
-        logging.info('>>> Please manage database and table directly in the Airtable service. <<<')
+        logging.info('>>> Please manage database and tables directly in the Airtable service. <<<')
 
         air_api = Api(AIRTABLE_SETTINGS.API_PAT)
         air_users_table = air_api.table(AIRTABLE_SETTINGS.BASE_ID, AIRTABLE_SETTINGS.USERS_TABLE)
+        air_pending_users_table = air_api.table(AIRTABLE_SETTINGS.BASE_ID, AIRTABLE_SETTINGS.PENDING_USERS_TABLE)
 
         self.db_name = AIRTABLE_SETTINGS.BASE_ID
         self.api = air_api
         self.users_table = air_users_table
+        self.pending_users_table = air_pending_users_table
 
     def close_database(self) -> None:
         """Shuts down the database."""
         self.api = None
         self.users_table = None
+        self.pending_users_table = None
+
+    def _get_table(self, table_name: str):
+        """Get the appropriate table instance."""
+        if table_name.upper() == 'PENDING_USERS':
+            return self.pending_users_table
+        return self.users_table
 
     def upsert(self, context: dict=None) -> None:
-        """Updates or inserts a new user record with supplied data (cols + value dict)."""
-        assert(context.get('data', None) is not None)
-        
+        """Updates or inserts a record with supplied data (cols + value dict)."""
+        assert(context is not None and context.get('data') is not None)
+
+        table_name = context.get('table', 'USERS')
         data = context['data']
 
-        assert(data.get('username', None) is not None)
-        assert(data.get('password', None) is not None)
-        assert(data.get('su', None) is not None)
-        
+        assert(data.get('username') is not None)
+        assert(data.get('password') is not None)
+
         logging.info(f"Upsert: {data}")
         try:
+            table = self._get_table(table_name)
             username = data['username']
-            user_record = self.users_table.first(formula=f"username=\'{username}\'")
+            user_record = table.first(formula=f"username='{username}'")
             user_id = user_record['id'] if user_record else None
             if user_id:
-                self.users_table.update(user_id, fields=data, replace=True, typecast=True)
+                table.update(user_id, fields=data, replace=True, typecast=True)
             else:
-                self.users_table.create(fields=data, typecast=True)
+                table.create(fields=data, typecast=True)
         except Exception as ex:
             self.close_database()
             raise DatabaseError({
@@ -132,24 +168,26 @@ class AirtableProvider(StorageProvider):
 
 
     def query(self, context: dict=None) -> List[dict]:
-        """Executes a query on users table and returns rows as list of dicts."""
-        assert(context.get('fields', None) is not None)
+        """Executes a query and returns rows as list of dicts."""
+        assert(context is not None and context.get('fields') is not None)
 
-        fields = context.get('fields', None)
-        conds = context.get('conds', None)
-        modifier = context.get('modifier', None)
+        table_name = context.get('table', 'USERS')
+        fields = context.get('fields')
+        conds = context.get('conds')
+        modifier = context.get('modifier')
 
         logging.info(f"Query: {fields}, {conds}, {modifier}")
         try:
+            table = self._get_table(table_name)
             max_records = 1000
             if modifier and modifier.startswith('LIMIT '):
                 max_records = int(modifier.replace('LIMIT ', ''))
             if fields == '*':
-                user_records = self.users_table.all(formula=conds, sort=['username', 'su'], max_records=max_records)
+                records = table.all(formula=conds, sort=['username'], max_records=max_records)
             else:
-                fields = fields.replace(' ', '').split(',')
-                user_records = self.users_table.all(fields=fields, formula=conds, sort=['username', 'su'], max_records=max_records)
-            results = [record['fields'] for record in user_records]
+                fields_list = fields.replace(' ', '').split(',')
+                records = table.all(fields=fields_list, formula=conds, sort=['username'], max_records=max_records)
+            results = [record['fields'] for record in records]
             return results
         except Exception as ex:
             self.close_database()
@@ -160,17 +198,19 @@ class AirtableProvider(StorageProvider):
             }, 500)
 
     def delete(self, context: dict=None) -> None:
-        """Deletes record from users table."""
-        assert(context.get('conds', None) is not None)
+        """Deletes record from specified table."""
+        assert(context is not None and context.get('conds') is not None)
 
+        table_name = context.get('table', 'USERS')
         conds = context['conds']
 
         logging.info(f"Delete: {conds}")
         try:
-            user_record = self.users_table.first(formula=conds)
-            user_id = user_record['id'] if user_record else None
-            if user_id:
-                self.users_table.delete(user_id)
+            table = self._get_table(table_name)
+            record = table.first(formula=conds)
+            record_id = record['id'] if record else None
+            if record_id:
+                table.delete(record_id)
         except Exception as ex:
             self.close_database()
             raise DatabaseError({

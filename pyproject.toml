@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "st-auth-simple"
-version = "1.0.1"
-description = "Simple username/password authentication for Streamlit apps with pluggable storage backends"
+version = "1.0.2"
+description = "Simple username/password authentication for Streamlit apps with pluggable storage backends (includes optional email signup)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
@@ -37,6 +37,7 @@ dependencies = [
     "streamlit>=1.56.0",
     "pycryptodome>=3.23.0",
     "python-dotenv>=1.0.1",
+    "sendgrid>=6.11.0",
 ]
 
 [project.optional-dependencies]

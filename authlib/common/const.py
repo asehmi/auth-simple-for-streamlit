@@ -1,6 +1,8 @@
 USERNAME        = 'username'
 PASSWORD        = 'password'
 AUTH_TOKEN      = 'auth_token'
+VALIDATION_PIN  = 'validation_pin'
+IS_VALIDATED    = 'is_validated'
 UPDATED_AT      = 'updated_at'
 EXPIRES_AT      = 'expires_at'
 CREATED_AT      = 'created_at'

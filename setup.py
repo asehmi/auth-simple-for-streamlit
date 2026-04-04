@@ -4,13 +4,14 @@ from setuptools import setup, find_packages
 
 setup(
     name="st-auth-simple",
-    version="1.0.1",
+    version="1.0.2",
     packages=find_packages(exclude=["tests", "docs", "_pm", "*.egg-info"]),
     include_package_data=True,
     install_requires=[
         "streamlit>=1.56.0",
         "pycryptodome>=3.23.0",
         "python-dotenv>=1.0.1",
+        "sendgrid>=6.11.0",
     ],
     extras_require={
         "airtable": ["pyairtable>=3.3.0"],

@@ -14,7 +14,10 @@
       "Bash(python -c \"from authlib.common.cookie_component import CookieComponent; print\\('CookieComponent imported successfully'\\)\")",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(session\")"
+      "Bash(session\")",
+      "Bash(sqlite3:*)",
+      "Bash(pip show:*)",
+      "Bash(python:*)"
     ]
   }
 }

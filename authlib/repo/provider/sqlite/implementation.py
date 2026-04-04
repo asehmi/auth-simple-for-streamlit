@@ -11,6 +11,11 @@ from ..base_provider import StorageProvider
 from .settings import SQLITE_SETTINGS
 from . import DatabaseError
 
+# Get pending users table name from settings
+def _get_pending_users_table():
+    from .settings import SQLITE_SETTINGS
+    return SQLITE_SETTINGS.PENDING_USERS_TABLE if hasattr(SQLITE_SETTINGS, 'PENDING_USERS_TABLE') else 'PENDING_USERS'
+
 class SQLiteProvider(StorageProvider):
 
     def __init__(self, allow_db_create=False, if_table_exists: Literal['ignore', 'recreate'] = 'ignore'):
@@ -32,7 +37,17 @@ class SQLiteProvider(StorageProvider):
             con=self.con,
             db_name=self.db_name,
             table_name='USERS',
-            col_spec='id INTEGER PRIMARY KEY, username UNIQUE ON CONFLICT REPLACE, password, su INTEGER',
+            col_spec='id INTEGER PRIMARY KEY, username UNIQUE ON CONFLICT REPLACE, password, su INTEGER, auth_token, expires_at',
+            if_table_exists=if_table_exists
+        )
+
+        # Create PENDING_USERS table for signup flow
+        pending_users_table = _get_pending_users_table()
+        SQLiteProvider._create_table(
+            con=self.con,
+            db_name=self.db_name,
+            table_name=pending_users_table,
+            col_spec='id INTEGER PRIMARY KEY, username UNIQUE ON CONFLICT REPLACE, password, validation_pin, is_validated INTEGER DEFAULT 0, expires_at',
             if_table_exists=if_table_exists
         )
 
@@ -138,22 +153,23 @@ class SQLiteProvider(StorageProvider):
     # Note, username is UNIQUE ON CONFLICT REPLACE, so we use INSERT to get UPSERT behaviour
     def upsert(self, context: dict=None) -> None:
         """Updates or inserts a new user record with supplied data (cols + value dict)."""
-        assert(context.get('data', None) is not None)
+        assert(context is not None and context.get('data') is not None)
 
-        data = context.get('data', None)
+        table_name = context.get('table', 'USERS')
+        data = context.get('data')
 
         cols = ', '.join(list(data.keys()))
         # need to quote string values for SQLite
         # (assumes numeric values correspond to numeric columns)
         values_ = []
-        for _k, v in data.items():
+        for v in data.values():
             if isinstance(v, int) or isinstance(v, float):
                 values_.append(str(v))
             else:
                 values_.append(f'"{v}"')
         values = ', '.join([v for v in values_])
 
-        query = f"INSERT INTO USERS({cols}) VALUES({values})"
+        query = f"INSERT INTO {table_name}({cols}) VALUES({values})"
 
         logging.info(f"Upsert: {query}")
         try:
@@ -169,16 +185,15 @@ class SQLiteProvider(StorageProvider):
 
     # READ
     def query(self, context: dict=None) -> List[dict]:
-        """Executes a query on users table and returns rows as list of dicts."""
-        assert(context.get('fields', None) is not None)
+        """Executes a query and returns rows as list of dicts."""
+        assert(context is not None and context.get('fields') is not None)
 
-        fields = context.get('fields', None)
-        conds = context.get('conds', None)
-        modifier = context.get('modifier', None)
+        table_name = context.get('table', 'USERS')
+        fields = context.get('fields')
+        conds = context.get('conds')
+        modifier = context.get('modifier')
 
-        assert(fields is not None)
-
-        select = f"SELECT {fields} FROM USERS "
+        select = f"SELECT {fields} FROM {table_name} "
         where = f"WHERE {conds} " if conds else ""
         mod = f"{modifier} " if modifier else ""
 
@@ -199,13 +214,14 @@ class SQLiteProvider(StorageProvider):
 
     # DELETE
     def delete(self, context: dict=None) -> None:
-        """Deletes record from users table."""
-        assert(context.get('conds', None) is not None)
+        """Deletes record from specified table."""
+        assert(context is not None and context.get('conds') is not None)
 
+        table_name = context.get('table', 'USERS')
         conds = context['conds']
 
-        select = "DELETE FROM USERS "
-        where = f"WHERE {conds} " if conds else "" 
+        select = f"DELETE FROM {table_name} "
+        where = f"WHERE {conds} " if conds else ""
 
         query = f'{select}{where}'.strip()
 
