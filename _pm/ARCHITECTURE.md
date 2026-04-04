@@ -1,6 +1,6 @@
 # Architecture: Simple Authentication for Streamlit Apps
 
-**Version 1.0.0** | Updated April 4, 2026
+**Version 1.0.1** | Updated April 5, 2026 | **Server-Side Session Tokens**
 
 ## Core Philosophy
 
@@ -47,20 +47,20 @@ The public API is accessed via the `st_auth_simple` package, providing a clean s
      │ uses                 │ uses
      │                      │
 ┌────▼──────────────┐  ┌────▼────────────────────────────┐
-│  Session State    │  │  CookieManager                  │
-│  - auth_state()   │  │  + CookieComponent              │
-│  - state.user     │  │  - Read: st.context.cookies     │
-│  - Persists       │  │  - Write: st.html() JavaScript  │
-│    through reruns │  │  - 30-day expiration            │
-│                   │  │  - Auto-restores session        │
+│  Session State    │  │  AuthSession                    │
+│  - auth_state()   │  │  + CookieManager                │
+│  - state.user     │  │  - Server-side token mgmt       │
+│  - Persists       │  │  - 30-day expiration            │
+│    through reruns │  │  - Stored in database           │
+│                   │  │  - Synchronous validation       │
 └───────────────────┘  └────┬─────────────────────────────┘
                              │
                 ┌────────────┴──────────────┐
                 │                           │
         ┌───────▼─────────┐    ┌───────────▼────┐
         │  Browser Cookie │    │  StorageFactory│
-        │  (Persistent)   │    │  - SQLite      │
-        │  30-day expiry  │    │  - Airtable    │
+        │  (Token only)   │    │  - SQLite      │
+        │  32-char token  │    │  - Airtable    │
         └─────────────────┘    └────┬───────────┘
                                     │
                     ┌───────────────┴────────────────┐
@@ -72,6 +72,8 @@ The public API is accessed via the `st_auth_simple` package, providing a clean s
             │  - username    │        │  - username    │
             │  - password*   │        │  - password*   │
             │  - su          │        │  - su          │
+            │  - auth_token  │        │  - auth_token  │
+            │  - expires_at  │        │  - expires_at  │
             │   *encrypted   │        │   *encrypted   │
             └────────────────┘        └────────────────┘
 ```
@@ -147,18 +149,23 @@ from st_auth_simple import auth, authenticated, logout, requires_auth
 
 This separation keeps the public interface clean while allowing internal `authlib` package to evolve without breaking the API.
 
-### 6. **Persistent Cookie Management** (Browser State)
-Cookies are managed using Streamlit's new `st.context.cookies` API combined with JavaScript injection via `st.html()`.
+### 6. **Server-Side Session Tokens** (Token Persistence)
+Rather than storing user data in the browser, tokens are managed server-side:
 
 ```python
-# Read: Uses st.context.cookies (available immediately on page load)
-cookie_value = st.context.cookies.get(cookie_name)
+# Browser: Stores only a secure 32-character token
+# Server: Stores token + expiration in database
+# Read: Uses st.context.cookies to get token from browser
+token = st.context.cookies.get(cookie_name)
 
-# Write: Uses st.html() JavaScript to set browser cookie (30-day default)
-# JavaScript: document.cookie = name + "=" + value + "; expires=..."
+# Write: Uses st.html() JavaScript to set browser cookie with token only
+# JavaScript: document.cookie = name + "=" + token + "; expires=..."
+
+# Validation: Token lookup in database returns user data
+user = AuthSession.validate_session(store, token)
 ```
 
-This enables truly persistent "Remember me" functionality across browser sessions.
+This provides truly persistent "Remember me" functionality while keeping the browser's token separate from sensitive user data. All validation and expiration checking happens server-side in the database.
 
 ---
 
@@ -277,23 +284,28 @@ START
 4. `logout()` calls `st.rerun()` to force re-authentication
 5. User sees login form again
 
-### Cookie Persistence Flow
+### Server-Side Session Token Flow
 1. **On Login (with Remember me):**
-   - User dict serialized to JSON
-   - JSON stored in browser via `st.html()` JavaScript
-   - Browser sets 30-day expiration
+   - Credentials validated against database
+   - `AuthSession.create_session()` generates secure 32-char token
+   - Token and expiration stored in `auth_token` and `expires_at` DB columns
+   - Token (only) sent to browser and stored in cookie via `st.html()` JavaScript
+   - Browser sets 30-day expiration on cookie
    
 2. **On Browser Reopen:**
    - Streamlit starts fresh, reruns from top
    - `st.context.cookies` immediately available
-   - `_try_cookie_login()` reads cookie
-   - Database validates password hash
-   - User auto-logged in
+   - `_try_cookie_login()` reads 32-char token from cookie
+   - `AuthSession.validate_session()` looks up token in database
+   - Checks if token is expired
+   - Returns user data from DB if valid, None if expired or invalid
+   - User auto-logged in if valid
    
 3. **On Logout:**
-   - Cookie deleted via JavaScript
-   - Session state cleared
-   - Next page load shows login form
+   - `AuthSession.clear_session()` sets `auth_token` and `expires_at` to NULL in database
+   - Cookie deleted via JavaScript (or cleared on next load)
+   - Session state cleared immediately
+   - Next page load shows login form (token is now invalid in DB)
 
 ### Admin Flow
 1. `admin()` called from `admin.py` (standalone mode)
@@ -312,8 +324,15 @@ START
 | **Password Matching** | Decrypted on server, compared in-memory | Password is only in plaintext during comparison |
 | **Encryption Key** | `ENC_PASSWORD` + `ENC_NONCE` from `.env` | Must be kept secret; database is useless without these |
 | **Session State** | Streamlit session (in-memory) | Cleared when user closes browser/session expires |
-| **Remember Me Cookies** | Encrypted, httpOnly | User dict (including encrypted password) stored in cookie |
+| **Remember Me Tokens** | Server-side only | Browser stores 32-char token; user data and expiration stored in DB only |
+| **Token Validation** | Database lookup on each page load | Token checked against `auth_token` column; expiration checked against `expires_at` |
 | **Database Access** | Provider-specific (SQLite file perms, Airtable API token) | No built-in ACL; assumes secure deployment environment |
+
+**Key Improvements over v1.0.0:**
+- ✅ **No user data in browser** — Only a meaningless 32-char token stored in cookie
+- ✅ **Server controls expiration** — Token expires in database, not just client-side
+- ✅ **Synchronous logout** — Token deletion is immediate, no JavaScript timing issues
+- ✅ **Better security** — Attackers gaining access to token can only see which user it belongs to, not the password
 
 **Key Assumption:** This is for internal tools and low-volume scenarios where users are trusted and database is behind a firewall or properly secured. Not suitable for hostile environments.
 
@@ -512,31 +531,41 @@ Currently: Manual testing via `app.py` and `admin.py`
 
 ## Summary
 
-**st-auth-simple v1.0.0** is a production-ready authentication system excelling at its core goal: **simple, integrated username/password authentication for Streamlit apps**.
+**st-auth-simple v1.0.1** is a production-ready authentication system excelling at its core goal: **simple, integrated username/password authentication for Streamlit apps**.
 
 ### Highlights
 
 ✅ **Pip-installable** — Standard Python package (`st-auth-simple`)  
 ✅ **Clean public API** — via `st_auth_simple` package shim  
 ✅ **Minimal dependencies** — Only Streamlit, pycryptodome, python-dotenv (core)  
-✅ **Persistent login** — 30-day browser cookies with `st.context.cookies`  
+✅ **Persistent login** — 30-day server-side session tokens stored in database  
 ✅ **Multiple backends** — SQLite (local) and Airtable (cloud)  
 ✅ **Clear authentication flow** — Refactored `_auth()` with logical helper functions  
-✅ **Proper logout** — Clears session + cookie + forces re-authentication  
+✅ **Proper logout** — Synchronous DB clearing + session + forces re-authentication  
 ✅ **Admin interface** — User management (create, edit, delete)  
 ✅ **Production-ready code** — Clean, well-structured, documented  
+✅ **No user data in browser** — Only 32-char tokens; validation happens server-side  
+
+### v1.0.1 Improvements (Server-Side Tokens)
+
+- **Token-based sessions** instead of storing user data in cookies
+- **Synchronous operations** — No JavaScript timing issues on logout
+- **Server-controlled expiration** — Token validity checked in database
+- **Better security** — Browser never sees user credentials or encrypted passwords
+- **Linear code** — No status flags needed for state management
 
 ### Architecture Strengths
 
 - **Provider pattern** enables swapping backends without code changes
 - **Session state wrapper** ensures logins survive Streamlit reruns
 - **Custom cookie manager** using Streamlit native APIs (no external libs)
+- **AuthSession class** manages token generation, validation, and cleanup
 - **Refactored auth flow** with separation of concerns (helper functions)
 - **Form-based UI** with proper login card rendering
 
 ### When to Use
 
-Ideal for: Internal tools, dashboards, admin panels, low-threat scenarios
+Ideal for: Internal tools, dashboards, admin panels, low-threat scenarios, Streamlit Cloud deployments
 Not suitable for: Public-facing apps with high security requirements, enterprise SSO
 
 For high-security needs, consider Auth0, Firebase Auth, or enterprise solutions. For everything else, st-auth-simple delivers on its promise: **ease of integration without operational complexity**.
