@@ -15,7 +15,7 @@ The public API is accessed via the `st_auth_simple` package, providing a clean s
 ```
 ┌─────────────────────────────────────────────────────────┐
 │              Streamlit Applications                     │
-│         from st_auth_simple import (...)               │
+│         from st_auth_simple import (...)                │
 └────────────┬────────────────────────────────────────────┘
              │
              │ Public API
@@ -29,20 +29,19 @@ The public API is accessed via the `st_auth_simple` package, providing a clean s
 ┌────────────▼────────────────────────────────────────────┐
 │         authlib.auth Module (Implementation)            │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │  _auth()                  - Core auth logic      │   │
-│  │  ├─ _try_cookie_login()   - Auto-login from     │   │
-│  │  │                          persistent cookie   │   │
-│  │  ├─ _show_login_form()    - Render login card   │   │
-│  │  ├─ _handle_login_submit()- Validate & login    │   │
-│  │  └─ _show_logged_in_ui()  - Logged-in UI        │   │
+│  │  auth()                   - Core auth logic      │   │
+│  │  ├─ _try_cookie_login()   - Auto-login from      │   │
+│  │  │                          persistent cookie    │   │
+│  │  ├─ _show_login_form()    - Render login card    │   │
+│  │  ├─ _handle_login_submit()- Validate & login     │   │
+│  │  └─ _show_logged_in_ui()  - Logged-in UI         │   │
 │  │                                                  │   │
-│  │  auth()                   - Public wrapper       │   │
 │  │  authenticated()          - Check auth state     │   │
 │  │  logout()                 - Clear & rerun        │   │
 │  │  requires_auth()          - Decorator            │   │
 │  │  admin()                  - Admin mode           │   │
 │  └──────────────────────────────────────────────────┘   │
-└────┬──────────────────────┬──────────────────────────────┘
+└────┬──────────────────────┬─────────────────────────────┘
      │                      │
      │ uses                 │ uses
      │                      │
@@ -53,19 +52,19 @@ The public API is accessed via the `st_auth_simple` package, providing a clean s
 │  - Persists       │  │  - 30-day expiration            │
 │    through reruns │  │  - Stored in database           │
 │                   │  │  - Synchronous validation       │
-└───────────────────┘  └────┬─────────────────────────────┘
-                             │
-                ┌────────────┴──────────────┐
-                │                           │
+└───────────────────┘  └────┬────────────────────────────┘
+                            │
+                ┌───────────┴──────────────┐
+                │                          │
         ┌───────▼─────────┐    ┌───────────▼────┐
         │  Browser Cookie │    │  StorageFactory│
         │  (Token only)   │    │  - SQLite      │
         │  32-char token  │    │  - Airtable    │
         └─────────────────┘    └────┬───────────┘
                                     │
-                    ┌───────────────┴────────────────┐
-                    │                                │
-            ┌───────▼────────┐        ┌──────────────▼──┐
+                    ┌───────────────┴───────────────┐
+                    │                               │
+            ┌───────▼────────┐        ┌─────────────▼──┐
             │  SQLite DB     │        │  Airtable API  │
             │  (local)       │        │  (cloud)       │
             │  users table   │        │  users table   │
@@ -257,12 +256,33 @@ Entry point for all authentication functionality. Provides:
 
 | Function | Purpose |
 |----------|---------|
-| `auth()` | User-facing login widget (wrapped in expander) |
-| `_auth()` | Core authentication logic |
+| `auth()` | Core authentication logic with optional message callback |
 | `authenticated()` | Boolean check for current auth state |
 | `logout()` | Clear session and cookies |
 | `requires_auth` | Decorator to protect functions/pages |
 | `admin()` | Admin mode for database initialization and user management |
+
+**Message Handling via Callback:**
+```python
+def my_message_handler(msg: str, type: int):
+    if type == const.ERROR:
+        st.error(msg)
+    elif type == const.SUCCESS:
+        st.success(msg)
+    else:
+        st.info(msg)
+
+# Pass callback to auth()
+user = auth(sidebar=True, on_message_cb=my_message_handler)
+
+# Or use default console output
+user = auth(sidebar=True, on_message_cb="default")
+
+# Or silence all messages
+user = auth(sidebar=True, on_message_cb=None)
+```
+
+The `show_auth_message()` function dispatches all auth messages through the callback, allowing client apps to control how messages are displayed (Streamlit widgets, console, logging, etc.)
 
 ### **authlib/repo/storage_factory.py** (Dependency Injection)
 Instantiates the configured storage provider and caches it. Handles:
@@ -315,7 +335,7 @@ Streamlit app for:
 
 ## Authentication Flow
 
-### Main Authentication Flow (`_auth()`)
+### Main Authentication Flow (`auth()`)
 
 ```
 START
@@ -341,7 +361,7 @@ START
          ├─ Decrypt stored password
          ├─ Compare with input
          ├─ If match:
-         │  ├─ Set auth_state().user
+         │  ├─ Set auth_state.user
          │  ├─ If remember me: Save cookie (30 days)
          │  └─ st.rerun()
          └─ If no match: Show error message
@@ -417,7 +437,7 @@ START
 1. `admin()` called from `admin.py` (standalone mode)
 2. Admin confirms responsibility acknowledgment
 3. Database created (SQLite) or table initialized (Airtable)
-4. `auth_state().user` faked with superuser status
+4. `auth_state.user` faked with superuser status
 5. Admin can manage users (create, edit, delete, list)
 
 ---
@@ -646,7 +666,7 @@ Currently: Manual testing via `app.py` and `admin.py`
 ✅ **Minimal dependencies** — Only Streamlit, pycryptodome, python-dotenv, sendgrid (core)  
 ✅ **Persistent login** — 30-day server-side session tokens stored in database  
 ✅ **Multiple backends** — SQLite (local) and Airtable (cloud)  
-✅ **Clear authentication flow** — Refactored `_auth()` with logical helper functions  
+✅ **Clear authentication flow** — Refactored `auth()` with logical helper functions  
 ✅ **Immediate logout** — Synchronous DB token clearance, not timing-dependent  
 ✅ **Admin interface** — User management (create, edit, delete)  
 ✅ **Optional email signup** — PIN-based registration with email verification  

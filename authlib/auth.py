@@ -1,9 +1,8 @@
 # see: https://discuss.streamlit.io/t/authentication-script/14111
 from os import environ as osenv
-import time
 from functools import wraps
 import logging
-from typing import TypedDict
+from typing import Callable, Literal, TypedDict
 
 import streamlit as st
 
@@ -78,22 +77,21 @@ auth_state = _AuthStateProxy()
 
 # ------------------------------------------------------------------------------
 
-auth_message = st.empty()
-def set_auth_message(msg, type=const.INFO, delay=0.5, show_msgs=True):
-    global auth_message
-    if type == const.WARNING:
-        auth_message = st.warning
-    elif type == const.SUCCESS:
-        auth_message = st.success
-    elif type == const.ERROR:
-        auth_message = st.error
-    else: # default type == const.INFO:
-        auth_message = st.info
-    if show_msgs:
-        auth_message(msg)
-        if delay:
-            time.sleep(delay)
-            auth_message = st.empty()
+auth_message_cb: Callable[[str, int], None] | Literal["default"] | None = "default"
+def show_auth_message(msg: str, type: int = const.INFO) -> None:
+    global auth_message_cb
+    if auth_message_cb and auth_message_cb != "default":
+        auth_message_cb(msg, type)
+    elif auth_message_cb == "default":
+            # Default behavior if no callback provided
+        if type == const.WARNING:
+            print(f"⚠️ [AUTH] {msg}")
+        elif type == const.SUCCESS:
+            print(f"✅ [AUTH] {msg}")
+        elif type == const.ERROR:
+            print(f"❌ [AUTH] {msg}")
+        else: # default type == const.INFO:
+            print(f"ℹ️ [AUTH] {msg}")
 
 # Easy inteceptor for auth
 def requires_auth(fn):
@@ -102,13 +100,15 @@ def requires_auth(fn):
         if auth_state.user is not None:
             return fn(*args, **kwargs)
         else:
-            set_auth_message(f'{fn.__name__} requires authentication!')
+            show_auth_message(f'{fn.__name__} requires authentication!', type=const.WARNING)
     return wrapper
 
 @requires_auth
 def logout():
     # Clear server-side token from database FIRST (before browser cookie)
     # If DB clear fails, token remains in DB but is orphaned (security concern, but better than leaving token + cookie)
+    show_auth_message('Logging out...', type=const.INFO)
+    
     db_cleared = False
     if auth_state.user and const.USERNAME in auth_state.user:
         db_cleared = AuthSession.clear_session(store, auth_state.user[const.USERNAME])
@@ -124,9 +124,10 @@ def logout():
 
     # Warn user if token wasn't cleared from DB
     if not db_cleared:
-        set_auth_message('Warning: Session token could not be cleared from database. Please contact support if you experience login issues.',
-                        type=const.WARNING, show_msgs=True, delay=2)
+        show_auth_message('Warning: Session token could not be cleared from database. Please contact support if you experience login issues.',
+                        type=const.WARNING)
 
+    show_auth_message('Logged out', type=const.SUCCESS)
     st.rerun()
 
 def authenticated():
@@ -154,7 +155,7 @@ def _try_cookie_login():
     user = AuthSession.validate_session(store, token)
     if user:
         auth_state.user = user
-        set_auth_message('Auto-logged in', type=const.SUCCESS, show_msgs=True)
+        show_auth_message('Auto-logged in', type=const.INFO)
         st.rerun()
         return True
     else:
@@ -170,9 +171,8 @@ def _validate_email(email: str) -> bool:
     return re.match(pattern, email) is not None
 
 
-def _show_signup_form(show_msgs):
+def _show_signup_form():
     """Display signup form."""
-    set_auth_message('Create your account', delay=None, show_msgs=True)
 
     with st.form("signup_form", border=True):
         email = st.text_input("Email (will be your username)", value='')
@@ -181,30 +181,30 @@ def _show_signup_form(show_msgs):
         submit_button = st.form_submit_button("Sign Up", type="primary", use_container_width=False)
 
     if submit_button:
-        _handle_signup_submission(email, password, confirm_password, show_msgs)
+        _handle_signup_submission(email, password, confirm_password)
 
 
-def _handle_signup_submission(email: str, password: str, confirm_password: str, show_msgs: bool):
+def _handle_signup_submission(email: str, password: str, confirm_password: str):
     """Validate signup form and create pending user."""
     # Validate email format
     if not email or not _validate_email(email):
-        set_auth_message('Please enter a valid email address', type=const.ERROR, show_msgs=True)
+        show_auth_message('Please enter a valid email address', type=const.ERROR)
         return
 
     # Validate passwords match
     if not password or not confirm_password:
-        set_auth_message('Password fields cannot be empty', type=const.ERROR, show_msgs=True)
+        show_auth_message('Password fields cannot be empty', type=const.ERROR)
         return
 
     if password != confirm_password:
-        set_auth_message('Passwords do not match', type=const.ERROR, show_msgs=True)
+        show_auth_message('Passwords do not match', type=const.ERROR)
         return
 
     # Check if email already exists in users table
     ctx = {'fields': '*', 'conds': f'username="{email}"'}
     existing_user = store.query(context=ctx)
     if existing_user:
-        set_auth_message('This email is already registered', type=const.ERROR, show_msgs=True)
+        show_auth_message('This email is already registered', type=const.ERROR)
         return
 
     # Encrypt password
@@ -215,21 +215,20 @@ def _handle_signup_submission(email: str, password: str, confirm_password: str, 
         pin = SignupManager.create_pending_user(store, email, encrypted_password)
         # Send PIN via email
         if not EmailService.send_signup_pin(email, pin):
-            set_auth_message('Failed to send verification email. Please try again.', type=const.ERROR, show_msgs=True)
+            show_auth_message('Failed to send verification email. Please try again.', type=const.ERROR)
             return
         # Store email in session state for PIN verification
         auth_state.signup_email = email
-        set_auth_message(f'Verification code sent to {email}', type=const.SUCCESS, show_msgs=show_msgs)
+        show_auth_message(f'Verification code sent to {email}', type=const.INFO)
         st.rerun()
     except Exception as ex:
         logging.error(f'Signup error: {str(ex)}')
-        set_auth_message('An error occurred during signup. Please try again.', type=const.ERROR, show_msgs=True)
+        show_auth_message('An error occurred during signup. Please try again.', type=const.ERROR)
 
-
-def _show_pin_verification_form(show_msgs):
+def _show_pin_verification_form():
     """Display PIN verification form."""
     signup_email = auth_state.signup_email
-    set_auth_message(f'Enter the verification code sent to {signup_email}', delay=None, show_msgs=True)
+    show_auth_message(f'Enter the verification code sent to {signup_email}', type=const.INFO)
 
     with st.form("pin_form", border=True):
         pin = st.text_input("Verification Code (6 digits)", value='', max_chars=6)
@@ -252,28 +251,28 @@ def _show_pin_verification_form(show_msgs):
                 }
             })
             EmailService.send_signup_pin(auth_state.signup_email, new_pin)
-            set_auth_message('New code sent', type=const.SUCCESS, show_msgs=True)
+            show_auth_message('New code sent', type=const.INFO)
         else:
-            set_auth_message('Signup session expired. Please sign up again.', type=const.ERROR, show_msgs=True)
+            show_auth_message('Signup session expired. Please sign up again.', type=const.INFO)
             auth_state.signup_email = None
             st.rerun()
 
     if verify_button and pin:
-        _handle_pin_verification(auth_state.signup_email, pin, show_msgs)
+        _handle_pin_verification(auth_state.signup_email, pin)
 
 
-def _handle_pin_verification(email: str, pin: str, show_msgs: bool):
+def _handle_pin_verification(email: str, pin: str):
     """Validate PIN and complete signup."""
     success, error_msg = SignupManager.validate_pin(store, email, pin)
 
     if not success:
-        set_auth_message(error_msg, type=const.ERROR, show_msgs=True)
+        show_auth_message(error_msg, type=const.ERROR)
         return
 
     # PIN is valid, move user to users table
     user = SignupManager.complete_signup(store, email)
     if not user:
-        set_auth_message('Failed to complete signup. Please try again.', type=const.ERROR, show_msgs=True)
+        show_auth_message('Failed to complete signup. Please try again.', type=const.ERROR)
         return
 
     # Auto-login
@@ -285,18 +284,18 @@ def _handle_pin_verification(email: str, pin: str, show_msgs: bool):
     if token:
         # Token created successfully, set browser cookie
         session_token_manager.set(SESSION_TOKEN_NAME, token)
-        set_auth_message('Email verified! You are now logged in.', type=const.SUCCESS, show_msgs=show_msgs)
+        show_auth_message('Email verified! You are now logged in.', type=const.SUCCESS)
     else:
         # Token creation failed - user is logged in but won't auto-login next time
-        set_auth_message('Email verified! You are logged in, but "Remember me" could not be enabled. Please log in again next time.',
-                        type=const.WARNING, show_msgs=show_msgs)
+        show_auth_message('Email verified! You are logged in, but "Remember me" could not be enabled. Please log in again next time.',
+                        type=const.WARNING)
 
     st.rerun()
 
 
-def _show_login_form(show_msgs):
+def _show_login_form():
     """Display and handle the login form."""
-    set_auth_message('Please log in', delay=None, show_msgs=True)
+    show_auth_message('Logged out', type=const.SUCCESS)
 
     with st.form("login_form", border=True):
         username = st.text_input("Username", value='')
@@ -306,10 +305,10 @@ def _show_login_form(show_msgs):
 
     # Handle form submission
     if submit_button and username and password:
-        _handle_login_submission(username, password, remember_me, show_msgs)
+        _handle_login_submission(username, password, remember_me)
 
 
-def _handle_login_submission(username, password, remember_me, show_msgs):
+def _handle_login_submission(username, password, remember_me):
     """Validate credentials and log user in."""
     # Look up user
     ctx = {'fields': "*", 'conds': f"username=\"{username}\""}
@@ -317,13 +316,13 @@ def _handle_login_submission(username, password, remember_me, show_msgs):
     user = data[0] if data else None
 
     if not user:
-        set_auth_message('User not found', type=const.ERROR, show_msgs=True)
+        show_auth_message('User not found', type=const.ERROR)
         return
 
     # Verify password
     decrypted_password = aes256cbcExtended(ENC_PASSWORD, ENC_NONCE).decrypt(user[const.PASSWORD])
     if password != decrypted_password:
-        set_auth_message('Invalid password', type=const.ERROR, show_msgs=True)
+        show_auth_message('Invalid password', type=const.ERROR)
         return
 
     # Login successful
@@ -339,16 +338,16 @@ def _handle_login_submission(username, password, remember_me, show_msgs):
             # Token creation failed - user is logged in but won't auto-login next time
             logging.warning(f"Failed to create session token for {username} on login")
 
-    set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
+    show_auth_message('Logging in...', type=const.INFO)
     st.rerun()
 
 
 def _show_logged_in_ui(sidebar):
     """Display UI for authenticated users."""
+    show_auth_message('Logged in', type=const.SUCCESS)
+
     su_widget = st.sidebar.checkbox if sidebar else st.checkbox
     logout_widget = st.sidebar.button if sidebar else st.button
-
-    set_auth_message('Logged in', delay=None, show_msgs=True)
 
     if logout_widget('Logout'):
         logout()  # logout() calls st.rerun() internally
@@ -358,11 +357,18 @@ def _show_logged_in_ui(sidebar):
             _superuser_mode()
 
 
-def auth(sidebar=True, show_msgs=True):
+def auth(sidebar=True, on_message_cb: Callable[[str, int], None] | Literal["default"] | None = "default"):
     """
     Main authentication function.
     Flow: Check if authenticated -> Try cookie login -> Show login/signup forms
+    
+    Args:
+    - sidebar (bool): Whether to display authentication UI in the sidebar or main area.
+    - on_message_cb (callable or "default" or None): Optional callback for displaying messages. If "default", uses built-in print statements. If None, no messages are shown.
     """
+    global auth_message_cb
+    auth_message_cb = on_message_cb
+
     global store
 
     # Initialize storage provider
@@ -376,11 +382,10 @@ def auth(sidebar=True, show_msgs=True):
         except Exception as ex:
             logging.warning(f">>> Storage exception <<<\n`{str(ex)}`")
             store = None
-            set_auth_message(
+            show_auth_message(
                 "Auth DB Not Found. Consider running admin script in standalone mode to generate it."
                 "\n\nFor Airtable, ensure the `users` and `pending_users` tables exist and access settings are correct." if STORAGE == 'AIRTABLE' else "",
-                type=const.WARNING,
-                show_msgs=True
+                type=const.WARNING
             )
 
     # Show authentication header
@@ -404,17 +409,17 @@ def auth(sidebar=True, show_msgs=True):
             login_tab, signup_tab = st.tabs(['Login', 'Sign Up'])
 
             with login_tab:
-                _show_login_form(show_msgs=show_msgs)
+                _show_login_form()
 
             with signup_tab:
                 # Check if in middle of signup flow (waiting for PIN)
                 if auth_state.signup_email:
-                    _show_pin_verification_form(show_msgs=show_msgs)
+                    _show_pin_verification_form()
                 else:
-                    _show_signup_form(show_msgs=show_msgs)
+                    _show_signup_form()
         else:
             # Only show login form (no signup)
-            _show_login_form(show_msgs=show_msgs)
+            _show_login_form()
 
     return auth_state.user[const.USERNAME] if auth_state.user is not None else None
 
