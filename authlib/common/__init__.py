@@ -3,6 +3,7 @@ from functools import wraps
 # Imports
 from .const import *  # noqa: F401, F403
 from .crypto import aes256cbcExtended  # noqa: F401
+from .session_token_manager import SessionTokenManager  # noqa: F401
 from .cookie_manager import CookieManager  # noqa: F401
 from .dt_helpers import tnow_iso, tnow_iso_str, dt_from_str, dt_from_ts, dt_to_str  # noqa: F401
 

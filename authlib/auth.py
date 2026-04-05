@@ -7,7 +7,7 @@ import logging
 import streamlit as st
 from streamlit import session_state as state
 
-from . import const, aes256cbcExtended, CookieManager
+from . import const, aes256cbcExtended, SessionTokenManager
 from .auth_session import AuthSession
 from .auth_signup import SignupManager
 from .common.email_service import EmailService
@@ -18,10 +18,10 @@ ENC_PASSWORD = osenv.get('ENC_PASSWORD')
 ENC_NONCE = osenv.get('ENC_NONCE')
 
 STORAGE = osenv.get('STORAGE', 'SQLITE')
-COOKIE_NAME = osenv.get('COOKIE_NAME', 'st-auth-simple')
+SESSION_TOKEN_NAME = osenv.get('SESSION_TOKEN_NAME', osenv.get('COOKIE_NAME', 'st-auth-simple'))  # Support both old and new env var names
 ALLOW_USER_SIGN_UP = osenv.get('ALLOW_USER_SIGN_UP', 'False').lower() == 'true'
 store = None
-cookie_manager = CookieManager()
+session_token_manager = SessionTokenManager()
 # ------------------------------------------------------------------------------
 
 # Wrapping session state in a function ensures that 'user' (or any attribute really) is
@@ -78,7 +78,7 @@ def logout():
     auth_state().skip_cookie_login = True  # Skip auto-login on this rerun only
 
     # Clear browser cookie
-    cookie_manager.delete(COOKIE_NAME)
+    session_token_manager.delete(SESSION_TOKEN_NAME)
 
     # Warn user if token wasn't cleared from DB
     if not db_cleared:
@@ -104,7 +104,7 @@ def _try_cookie_login():
         return False
 
     # Get token from browser cookie
-    token = cookie_manager.get(cookie=COOKIE_NAME)
+    token = session_token_manager.get(token=SESSION_TOKEN_NAME)
     if not token:
         return False
 
@@ -117,7 +117,7 @@ def _try_cookie_login():
         return True
     else:
         # Invalid/expired token
-        cookie_manager.delete(COOKIE_NAME)
+        session_token_manager.delete(SESSION_TOKEN_NAME)
         return False
 
 
@@ -241,7 +241,7 @@ def _handle_pin_verification(email: str, pin: str, show_msgs: bool):
     token = AuthSession.create_session(store, user, expires_in_days=30)
     if token:
         # Token created successfully, set browser cookie
-        cookie_manager.set(COOKIE_NAME, token)
+        session_token_manager.set(SESSION_TOKEN_NAME, token)
         set_auth_message('Email verified! You are now logged in.', type=const.SUCCESS, show_msgs=show_msgs)
     else:
         # Token creation failed - user is logged in but won't auto-login next time
@@ -291,7 +291,7 @@ def _handle_login_submission(username, password, remember_me, show_msgs):
         token = AuthSession.create_session(store, user, expires_in_days=30)
         if token:
             # Token created successfully, set browser cookie
-            cookie_manager.set(COOKIE_NAME, token)  # Store only the token, not user data
+            session_token_manager.set(SESSION_TOKEN_NAME, token)  # Store only the token, not user data
         else:
             # Token creation failed - user is logged in but won't auto-login next time
             logging.warning(f"Failed to create session token for {username} on login")

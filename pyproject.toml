@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "st-auth-simple"
 version = "1.0.2"
-description = "Simple username/password authentication for Streamlit apps with pluggable storage backends (includes optional email signup)"
+description = "Simple username/password authentication for Streamlit apps with server-side session tokens and pluggable storage backends (includes optional email signup)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
