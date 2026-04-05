@@ -65,9 +65,13 @@ def requires_auth(fn):
 
 @requires_auth
 def logout():
-    # Clear server-side token from database
+    # Clear server-side token from database FIRST (before browser cookie)
+    # If DB clear fails, token remains in DB but is orphaned (security concern, but better than leaving token + cookie)
+    db_cleared = False
     if auth_state().user and const.USERNAME in auth_state().user:
-        AuthSession.clear_session(store, auth_state().user[const.USERNAME])
+        db_cleared = AuthSession.clear_session(store, auth_state().user[const.USERNAME])
+        if not db_cleared:
+            logging.warning(f"Failed to clear session token for {auth_state().user[const.USERNAME]} during logout")
 
     # Clear session state
     auth_state().user = None
@@ -75,6 +79,11 @@ def logout():
 
     # Clear browser cookie
     cookie_manager.delete(COOKIE_NAME)
+
+    # Warn user if token wasn't cleared from DB
+    if not db_cleared:
+        set_auth_message('Warning: Session token could not be cleared from database. Please contact support if you experience login issues.',
+                        type=const.WARNING, show_msgs=True, delay=2)
 
     st.rerun()
 
@@ -119,17 +128,15 @@ def _validate_email(email: str) -> bool:
     return re.match(pattern, email) is not None
 
 
-def _show_signup_form(sidebar, show_msgs):
+def _show_signup_form(show_msgs):
     """Display signup form."""
     set_auth_message('Create your account', delay=None, show_msgs=True)
 
-    form_location = st.sidebar if sidebar else st
-    with form_location:
-        with st.form("signup_form", border=True):
-            email = st.text_input("Email (will be your username)", value='')
-            password = st.text_input("Password", type="password")
-            confirm_password = st.text_input("Confirm password", type="password")
-            submit_button = st.form_submit_button("Sign Up", type="primary", use_container_width=False)
+    with st.form("signup_form", border=True):
+        email = st.text_input("Email (will be your username)", value='')
+        password = st.text_input("Password", type="password")
+        confirm_password = st.text_input("Confirm password", type="password")
+        submit_button = st.form_submit_button("Sign Up", type="primary", use_container_width=False)
 
     if submit_button:
         _handle_signup_submission(email, password, confirm_password, show_msgs)
@@ -177,38 +184,36 @@ def _handle_signup_submission(email: str, password: str, confirm_password: str, 
         set_auth_message('An error occurred during signup. Please try again.', type=const.ERROR, show_msgs=True)
 
 
-def _show_pin_verification_form(sidebar, show_msgs):
+def _show_pin_verification_form(show_msgs):
     """Display PIN verification form."""
     set_auth_message(f'Enter the verification code sent to {auth_state().signup_email}', delay=None, show_msgs=True)
 
-    form_location = st.sidebar if sidebar else st
-    with form_location:
-        with st.form("pin_form", border=True):
-            pin = st.text_input("Verification Code (6 digits)", value='', max_chars=6)
-            verify_button = st.form_submit_button("Verify", type="primary", use_container_width=False)
+    with st.form("pin_form", border=True):
+        pin = st.text_input("Verification Code (6 digits)", value='', max_chars=6)
+        verify_button = st.form_submit_button("Verify", type="primary", use_container_width=False)
 
-        # Resend button outside form
-        if st.button("Resend Code", use_container_width=False):
-            user = SignupManager.get_pending_user(store, auth_state().signup_email)
-            if user:
-                # Regenerate PIN and send
-                new_pin = SignupManager.generate_pin()
-                store.upsert({
-                    'table': SignupManager.PENDING_USERS_TABLE,
-                    'data': {
-                        'username': auth_state().signup_email,
-                        'password': user['password'],
-                        'validation_pin': new_pin,
-                        'is_validated': 0,
-                        'expires_at': user['expires_at'],
-                    }
-                })
-                EmailService.send_signup_pin(auth_state().signup_email, new_pin)
-                set_auth_message('New code sent', type=const.SUCCESS, show_msgs=True)
-            else:
-                set_auth_message('Signup session expired. Please sign up again.', type=const.ERROR, show_msgs=True)
-                auth_state().signup_email = None
-                st.rerun()
+    # Resend button outside form
+    if st.button("Resend Code", use_container_width=False):
+        user = SignupManager.get_pending_user(store, auth_state().signup_email)
+        if user:
+            # Regenerate PIN and send
+            new_pin = SignupManager.generate_pin()
+            store.upsert({
+                'table': SignupManager.PENDING_USERS_TABLE,
+                'data': {
+                    'username': auth_state().signup_email,
+                    'password': user['password'],
+                    'validation_pin': new_pin,
+                    'is_validated': 0,
+                    'expires_at': user['expires_at'],
+                }
+            })
+            EmailService.send_signup_pin(auth_state().signup_email, new_pin)
+            set_auth_message('New code sent', type=const.SUCCESS, show_msgs=True)
+        else:
+            set_auth_message('Signup session expired. Please sign up again.', type=const.ERROR, show_msgs=True)
+            auth_state().signup_email = None
+            st.rerun()
 
     if verify_button and pin:
         _handle_pin_verification(auth_state().signup_email, pin, show_msgs)
@@ -232,26 +237,29 @@ def _handle_pin_verification(email: str, pin: str, show_msgs: bool):
     auth_state().user = user
     auth_state().signup_email = None
 
-    # Optionally create session token for auto-login
+    # Create session token for auto-login (remember me)
     token = AuthSession.create_session(store, user, expires_in_days=30)
-    cookie_manager.set(COOKIE_NAME, token)
+    if token:
+        # Token created successfully, set browser cookie
+        cookie_manager.set(COOKIE_NAME, token)
+        set_auth_message('Email verified! You are now logged in.', type=const.SUCCESS, show_msgs=show_msgs)
+    else:
+        # Token creation failed - user is logged in but won't auto-login next time
+        set_auth_message('Email verified! You are logged in, but "Remember me" could not be enabled. Please log in again next time.',
+                        type=const.WARNING, show_msgs=show_msgs)
 
-    set_auth_message('Email verified! You are now logged in.', type=const.SUCCESS, show_msgs=show_msgs)
     st.rerun()
 
 
-def _show_login_form(sidebar, show_msgs):
+def _show_login_form(show_msgs):
     """Display and handle the login form."""
     set_auth_message('Please log in', delay=None, show_msgs=True)
 
-    # Render form in sidebar or main area based on sidebar flag
-    form_location = st.sidebar if sidebar else st
-    with form_location:
-        with st.form("login_form", border=True):
-            username = st.text_input("Username", value='')
-            password = st.text_input("Password", type="password")
-            remember_me = st.checkbox("Remember me", value=False)
-            submit_button = st.form_submit_button("Login", type="primary", use_container_width=False)
+    with st.form("login_form", border=True):
+        username = st.text_input("Username", value='')
+        password = st.text_input("Password", type="password")
+        remember_me = st.checkbox("Remember me", value=False)
+        submit_button = st.form_submit_button("Login", type="primary", use_container_width=False)
 
     # Handle form submission
     if submit_button and username and password:
@@ -281,7 +289,12 @@ def _handle_login_submission(username, password, remember_me, show_msgs):
     # If "Remember me" checked, create server-side session token
     if remember_me:
         token = AuthSession.create_session(store, user, expires_in_days=30)
-        cookie_manager.set(COOKIE_NAME, token)  # Store only the token, not user data
+        if token:
+            # Token created successfully, set browser cookie
+            cookie_manager.set(COOKIE_NAME, token)  # Store only the token, not user data
+        else:
+            # Token creation failed - user is logged in but won't auto-login next time
+            logging.warning(f"Failed to create session token for {username} on login")
 
     set_auth_message('Logging in...', type=const.SUCCESS, show_msgs=show_msgs)
     st.rerun()
@@ -302,7 +315,7 @@ def _show_logged_in_ui(sidebar):
             _superuser_mode()
 
 
-def _auth(sidebar=True, show_msgs=True):
+def auth(sidebar=True, show_msgs=True):
     """
     Main authentication function.
     Flow: Check if authenticated -> Try cookie login -> Show login/signup forms
@@ -328,8 +341,8 @@ def _auth(sidebar=True, show_msgs=True):
             )
 
     # Show authentication header
-    header_widget = st.sidebar.subheader if sidebar else st.subheader
-    header_widget('Authentication')
+    with st.sidebar if sidebar else st:
+        st.subheader('Authentication')
 
     # Check if already authenticated
     if auth_state().user is not None:
@@ -340,30 +353,28 @@ def _auth(sidebar=True, show_msgs=True):
     if _try_cookie_login():
         return auth_state().user[const.USERNAME]
 
-    # Show login and/or signup forms
-    if ALLOW_USER_SIGN_UP:
-        # Show tabs for login and signup
-        tab_location = st.sidebar if sidebar else st
-        login_tab, signup_tab = tab_location.tabs(['Login', 'Sign Up'])
+    forms_location = st.sidebar if sidebar else st
+    with forms_location:
+        # Show login and/or signup forms
+        if ALLOW_USER_SIGN_UP:
+            # Show tabs for login and signup
+            login_tab, signup_tab = st.tabs(['Login', 'Sign Up'])
 
-        with login_tab:
-            _show_login_form(sidebar=False, show_msgs=show_msgs)
+            with login_tab:
+                _show_login_form(show_msgs=show_msgs)
 
-        with signup_tab:
-            # Check if in middle of signup flow (waiting for PIN)
-            if auth_state().signup_email:
-                _show_pin_verification_form(sidebar=False, show_msgs=show_msgs)
-            else:
-                _show_signup_form(sidebar=False, show_msgs=show_msgs)
-    else:
-        # Only show login form (no signup)
-        _show_login_form(sidebar, show_msgs)
+            with signup_tab:
+                # Check if in middle of signup flow (waiting for PIN)
+                if auth_state().signup_email:
+                    _show_pin_verification_form(show_msgs=show_msgs)
+                else:
+                    _show_signup_form(show_msgs=show_msgs)
+        else:
+            # Only show login form (no signup)
+            _show_login_form(show_msgs=show_msgs)
 
     return auth_state().user[const.USERNAME] if auth_state().user is not None else None
 
-def auth(*args, **kwargs):
-    with st.expander('Authentication', expanded=True):
-        return _auth(*args, **kwargs)
 
 # ------------------------------------------------------------------------------
 # Helpers

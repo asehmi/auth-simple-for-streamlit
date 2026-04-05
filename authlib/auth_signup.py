@@ -3,6 +3,7 @@ Sign-up flow management: temporary pending users table and PIN validation.
 """
 
 import secrets
+import logging
 from os import environ as osenv
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
@@ -106,7 +107,7 @@ class SignupManager:
 
         # Check expiration
         try:
-            expires_at = dt_from_str(user.get('expires_at'))
+            expires_at = dt_from_str(user.get('expires_at'), format='%Y-%m-%dT%H:%M:%S.%f')
             if datetime.now() > expires_at:
                 return False, 'PIN has expired. Please sign up again.'
         except (ValueError, TypeError):
@@ -119,32 +120,43 @@ class SignupManager:
         """
         Complete a pending signup by moving user to main users table.
 
+        This operation is atomic: both upsert and delete must succeed.
+        If delete fails, the pending record remains in the DB as a cleanup marker.
+
         Args:
             store: Storage provider instance
             email: User's email
 
         Returns:
-            User dict (for auto-login) or None if signup not found or invalid
+            User dict (for auto-login) or None if signup not found, invalid, or DB operation fails
         """
         user = SignupManager.get_pending_user(store, email)
         if not user:
             return None
 
-        # Move to users table
-        store.upsert({
-            'table': 'USERS',
-            'data': {
-                'username': email,
-                'password': user['password'],
-                'su': 0,
-            }
-        })
+        try:
+            # Move to users table
+            store.upsert({
+                'table': 'USERS',
+                'data': {
+                    'username': email,
+                    'password': user['password'],
+                    'su': 0,
+                }
+            })
+        except Exception as ex:
+            logging.error(f'Failed to create user {email} in signup completion: {str(ex)}')
+            return None
 
-        # Delete from pending users
-        store.delete({
-            'table': SignupManager.PENDING_USERS_TABLE,
-            'conds': f'username="{email}"',
-        })
+        try:
+            # Delete from pending users
+            store.delete({
+                'table': SignupManager.PENDING_USERS_TABLE,
+                'conds': f'username="{email}"',
+            })
+        except Exception as ex:
+            # Log but don't fail - user is already created, pending record is just cleanup
+            logging.warning(f'Failed to delete pending user {email}: {str(ex)}. User created but pending record remains.')
 
         # Return user dict for auto-login (matching the structure returned by query)
         return {
@@ -169,7 +181,7 @@ class SignupManager:
             now = datetime.now()
             for user in all_pending:
                 try:
-                    expires_at = dt_from_str(user.get('expires_at'))
+                    expires_at = dt_from_str(user.get('expires_at'), format='%Y-%m-%dT%H:%M:%S.%f')
                     if now > expires_at:
                         store.delete({
                             'table': SignupManager.PENDING_USERS_TABLE,

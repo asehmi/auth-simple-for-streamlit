@@ -4,6 +4,7 @@ No browser cookies, no JavaScript complexity - just clean DB-stored tokens.
 """
 
 import secrets
+import logging
 import datetime
 from . import const
 
@@ -27,24 +28,29 @@ class AuthSession:
             expires_in_days: Token expiration in days
 
         Returns:
-            Auth token string
+            Auth token string, or empty string if creation failed
+
+        Note: Caller should check for empty string return to detect failure.
         """
         token = AuthSession.generate_token()
         expires_at = (datetime.datetime.now() + datetime.timedelta(days=expires_in_days)).isoformat()
 
-        # Update user record with token in DB
-        ctx = {
-            'data': {
-                const.USERNAME: user[const.USERNAME],
-                const.PASSWORD: user[const.PASSWORD],
-                const.SU: user[const.SU],
-                const.AUTH_TOKEN: token,
-                const.EXPIRES_AT: expires_at,
+        try:
+            # Update user record with token in DB
+            ctx = {
+                'data': {
+                    const.USERNAME: user[const.USERNAME],
+                    const.PASSWORD: user[const.PASSWORD],
+                    const.SU: user[const.SU],
+                    const.AUTH_TOKEN: token,
+                    const.EXPIRES_AT: expires_at,
+                }
             }
-        }
-        store.upsert(context=ctx)
-
-        return token
+            store.upsert(context=ctx)
+            return token
+        except Exception as ex:
+            logging.error(f'Failed to create session token for {user.get(const.USERNAME)}: {str(ex)}')
+            return ''
 
     @staticmethod
     def validate_session(store, token: str):
@@ -84,28 +90,41 @@ class AuthSession:
         return user
 
     @staticmethod
-    def clear_session(store, username: str) -> None:
+    def clear_session(store, username: str) -> bool:
         """
         Clear the session token for a user (on logout).
 
         Args:
             store: Storage provider
             username: Username to clear token for
-        """
-        # Query for user to get their data
-        ctx = {'fields': "*", 'conds': f"{const.USERNAME}=\"{username}\""}
-        data = store.query(context=ctx)
 
-        if data:
-            user = data[0]
-            # Update user record, clearing the token
-            ctx = {
-                'data': {
-                    const.USERNAME: user[const.USERNAME],
-                    const.PASSWORD: user[const.PASSWORD],
-                    const.SU: user[const.SU],
-                    const.AUTH_TOKEN: None,
-                    const.EXPIRES_AT: None,
+        Returns:
+            True if token cleared successfully, False if failed
+
+        Note: Called during logout. Failure means token remains in DB (security concern).
+        """
+        try:
+            # Query for user to get their data
+            ctx = {'fields': "*", 'conds': f"{const.USERNAME}=\"{username}\""}
+            data = store.query(context=ctx)
+
+            if data:
+                user = data[0]
+                # Update user record, clearing the token
+                ctx = {
+                    'data': {
+                        const.USERNAME: user[const.USERNAME],
+                        const.PASSWORD: user[const.PASSWORD],
+                        const.SU: user[const.SU],
+                        const.AUTH_TOKEN: None,
+                        const.EXPIRES_AT: None,
+                    }
                 }
-            }
-            store.upsert(context=ctx)
+                store.upsert(context=ctx)
+                return True
+            else:
+                logging.warning(f'User {username} not found when clearing session')
+                return False
+        except Exception as ex:
+            logging.error(f'Failed to clear session token for {username}: {str(ex)}')
+            return False
