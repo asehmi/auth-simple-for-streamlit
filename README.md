@@ -113,27 +113,84 @@ The Streamlit app `admin.py` illustrates how to auto-start `authlib`'s superuser
 
 ## Installation and running the app
 
-To install the pre-requisites, open a console window in the root folder and run:
+### Option 1: Run the demo locally (development)
+
+To install the pre-requisites and run the demo apps:
 
 ```bash
 $ pip install -r requirements.txt
-```
-
-To run the sample application, open a console window in the root folder and run:
-
-```bash
-# Starts the app on the default port 8765
 $ streamlit run app.py
-
-# I use a specific port 8080 like this
-$ streamlit run --server.port 8080 app.py
 ```
 
-To run the DB Admin application, open a console window in the root folder and run:
+To initialize the database, run the admin app:
 
 ```bash
 $ streamlit run admin.py
 ```
+
+### Option 2: Install as a library in your own apps
+
+To use `st-auth-simple` in your local Streamlit applications, install it in development mode:
+
+```bash
+# From the root of this repository
+$ pip install -e .
+```
+
+This installs the `st_auth_simple` package in editable mode, allowing you to:
+- Import from your apps: `from st_auth_simple import auth, authenticated, logout, requires_auth`
+- Make changes to the library and see them reflected immediately (no reinstall needed)
+- Keep a single copy of the library while developing multiple apps
+
+**To include optional Airtable support:**
+
+```bash
+$ pip install -e ".[airtable]"
+```
+
+**In your Streamlit app:**
+
+```python
+from st_auth_simple import auth, authenticated, requires_auth
+from authlib.common import const
+
+def my_message_handler(msg: str, type: int):
+    if type == const.ERROR:
+        st.error(msg)
+    # ... handle other message types
+    
+# Call auth() with your custom callback
+user = auth(sidebar=True, on_message_cb=my_message_handler)
+
+if authenticated():
+    st.success(f"Welcome, {user}!")
+else:
+    st.info("Please log in to continue")
+```
+
+**Using the decorator to protect functions:**
+
+```python
+@requires_auth
+def admin_panel():
+    st.subheader("Admin Controls")
+    # This only runs if user is authenticated
+    pass
+```
+
+### Running the demo apps with library changes
+
+If you're developing changes to the library and want to test with the demo apps:
+
+```bash
+# Install library in editable mode
+$ pip install -e .
+
+# Run the demo
+$ streamlit run app.py
+```
+
+Any changes to `authlib/` will be reflected on the next page reload (Streamlit rerun).
 
 ## Getting started with a SQLite database
 
