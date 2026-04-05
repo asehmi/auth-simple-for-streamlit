@@ -85,13 +85,13 @@ def show_auth_message(msg: str, type: int = const.INFO) -> None:
     elif auth_message_cb == "default":
             # Default behavior if no callback provided
         if type == const.WARNING:
-            print(f"⚠️ [AUTH] {msg}")
+            print(f"[AUTH] WARNING: {msg}")
         elif type == const.SUCCESS:
-            print(f"✅ [AUTH] {msg}")
+            print(f"[AUTH] SUCCESS: {msg}")
         elif type == const.ERROR:
-            print(f"❌ [AUTH] {msg}")
+            print(f"[AUTH] ERROR: {msg}")
         else: # default type == const.INFO:
-            print(f"ℹ️ [AUTH] {msg}")
+            print(f"[AUTH] INFO: {msg}")
 
 # Easy inteceptor for auth
 def requires_auth(fn):
@@ -384,7 +384,7 @@ def auth(sidebar=True, on_message_cb: Callable[[str, int], None] | Literal["defa
             store = None
             show_auth_message(
                 "Auth DB Not Found. Consider running admin script in standalone mode to generate it."
-                "\n\nFor Airtable, ensure the `users` and `pending_users` tables exist and access settings are correct." if STORAGE == 'AIRTABLE' else "",
+                "\n\nFor Airtable, ensure the `USERS` and `PENDING_USERS` tables exist and access settings are correct." if STORAGE == 'AIRTABLE' else "",
                 type=const.WARNING
             )
 

@@ -14,7 +14,7 @@ from authlib.common.dt_helpers import dt_from_str
 class SignupManager:
     """Manages pending user signups with email PIN verification."""
 
-    PENDING_USERS_TABLE = osenv.get('PENDING_USERS_TABLE', 'pending_users').upper()
+    PENDING_USERS_TABLE = osenv.get('PENDING_USERS_TABLE', 'PENDING_USERS').upper()
     PIN_EXPIRY_MINUTES = int(osenv.get('SIGNUP_PIN_EXPIRY_MINUTES', '30'))
     ENC_PASSWORD = osenv.get('ENC_PASSWORD')
     ENC_NONCE = osenv.get('ENC_NONCE')

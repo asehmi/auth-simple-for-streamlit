@@ -54,7 +54,7 @@ In the meantime, I think a solution like madflier's will be more palatable for m
 
 - **Session state support** — Logins survive Streamlit's top-down reruns via isolated `st.session_state['auth_state']` dictionary, preventing collision with client app state.
 
-- **Email-based signup with PIN verification** — Optional self-service user registration via SendGrid email with 6-digit PIN validation. Users move from `pending_users` → `users` table after PIN verification.
+- **Email-based signup with PIN verification** — Optional self-service user registration via SendGrid email with 6-digit PIN validation. Users move from `PENDING_USERS` → `USERS` table after PIN verification.
 
 - **Pluggable message callbacks** — Client apps control how auth messages are displayed via `on_message_cb` parameter. Supports custom callbacks, console output, or silent mode. Decouples message presentation from library logic.
 
@@ -227,7 +227,7 @@ A full example (which includes Airtable and encryption key settings) is availabl
 | `auth_token` | Single line text | Session token (empty if not logged in) |
 | `expires_at` | Single line text | ISO format datetime |
 
-**pending_users table:** *(Only if `ALLOW_USER_SIGN_UP='True'`)*
+**PENDING_USERS table:** *(Only if `ALLOW_USER_SIGN_UP='True'`)*
 | Field | Type | Notes |
 |-------|------|-------|
 | `username` | Single line text | Email awaiting verification |
@@ -258,7 +258,7 @@ STORAGE='AIRTABLE'
 AIRTABLE_PAT='pat---X---e'
 AIRTABLE_BASE_KEY='app---X---c'
 USERS_TABLE='users'
-PENDING_USERS_TABLE='pending_users'
+PENDING_USERS_TABLE='PENDING_USERS'
 ```
 
 See `.env.sample` for a complete example.
@@ -274,10 +274,10 @@ ALLOW_USER_SIGN_UP='True'
 SENDGRID_API_KEY='SG.xxxxx...'
 NOTIFICATION_FROM_EMAIL='noreply@yourapp.com'
 SIGNUP_PIN_EXPIRY_MINUTES='30'  # Optional, defaults to 30
-PENDING_USERS_TABLE='pending_users'  # Required
+PENDING_USERS_TABLE='PENDING_USERS'  # Required
 ```
 
-3. Create the `pending_users` table in Airtable or SQLite (SQLite is auto-created)
+3. Create the `PENDING_USERS` table in Airtable or SQLite (SQLite is auto-created)
 
 When enabled, users will see a "Sign Up" tab alongside the Login form. They'll enter email + password, receive a 6-digit PIN via email, verify it, and automatically be logged in.
 

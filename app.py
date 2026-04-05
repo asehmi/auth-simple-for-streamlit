@@ -12,6 +12,9 @@ from st_auth_simple import auth, authenticated, requires_auth  # noqa
 env.verify()
 
 def auth_message_cb(msg, type=const.INFO):
+    if not msg:
+        # Toast message can't be empty.. just return
+        return
     if type == const.WARNING:
         st.toast(msg, icon="⚠️", duration="long")
     elif type == const.SUCCESS:
