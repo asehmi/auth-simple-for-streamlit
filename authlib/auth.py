@@ -3,9 +3,9 @@ from os import environ as osenv
 import time
 from functools import wraps
 import logging
+from typing import TypedDict
 
 import streamlit as st
-from streamlit import session_state as state
 
 from . import const, aes256cbcExtended, SessionTokenManager
 from .auth_session import AuthSession
@@ -18,23 +18,65 @@ ENC_PASSWORD = osenv.get('ENC_PASSWORD')
 ENC_NONCE = osenv.get('ENC_NONCE')
 
 STORAGE = osenv.get('STORAGE', 'SQLITE')
-SESSION_TOKEN_NAME = osenv.get('SESSION_TOKEN_NAME', osenv.get('COOKIE_NAME', 'st-auth-simple'))  # Support both old and new env var names
+SESSION_TOKEN_NAME = osenv.get('SESSION_TOKEN_NAME', 'st-auth-simple')
 ALLOW_USER_SIGN_UP = osenv.get('ALLOW_USER_SIGN_UP', 'False').lower() == 'true'
 store = None
 session_token_manager = SessionTokenManager()
-# ------------------------------------------------------------------------------
 
-# Wrapping session state in a function ensures that 'user' (or any attribute really) is
-# in the session state and, in my opinion, works better with Streamlit's execution model,
-# e.g. if state is deleted from cache, it'll be auto-initialized when the function is called
-def auth_state():
-    if 'user' not in state:
-        state.user = None
-    if 'skip_cookie_login' not in state:
-        state.skip_cookie_login = False
-    if 'signup_email' not in state:
-        state.signup_email = None
-    return state
+# ------------------------------------------------------------------------------
+# Auth State Definition and Initialization
+
+class AuthState(TypedDict):
+    """Type definition for authentication state stored in st.session_state['auth_state']."""
+    user: dict | None                # user dict (database row) with keys like 'username', 'su', etc. or None if not authenticated
+    skip_cookie_login: bool          # Flag to skip auto-login on next run after logout
+    signup_email: str | None         # Store email during signup flow
+
+
+class _AuthStateProxy:
+    """
+    Minimal proxy providing attribute access to auth_state dict in session_state.
+    Keeps auth data isolated in st.session_state['auth_state'] while allowing auth_state.user syntax.
+    """
+    def __getattr__(self, name: str):
+        # Ensure auth_state dict is initialized
+        if 'auth_state' not in st.session_state:
+            init_auth_state()
+        return st.session_state['auth_state'].get(name)
+
+    def __setattr__(self, name: str, value):
+        # Ensure auth_state dict is initialized
+        if 'auth_state' not in st.session_state:
+            init_auth_state()
+        st.session_state['auth_state'][name] = value
+
+
+def init_auth_state() -> None:
+    """Initialize auth_state in session_state if not already present."""
+    if 'auth_state' not in st.session_state:
+        st.session_state['auth_state'] = {
+            'user': None,
+            'skip_cookie_login': False,
+            'signup_email': None
+        }
+
+
+def reset_auth_state() -> None:
+    """Reset authentication state to defaults."""
+    st.session_state['auth_state'] = {
+        'user': None,
+        'skip_cookie_login': False,
+        'signup_email': None
+    }
+
+
+# Initialize authentication state on first run
+init_auth_state()
+
+# Global proxy for convenient attribute access
+auth_state = _AuthStateProxy()
+
+# ------------------------------------------------------------------------------
 
 auth_message = st.empty()
 def set_auth_message(msg, type=const.INFO, delay=0.5, show_msgs=True):
@@ -57,7 +99,7 @@ def set_auth_message(msg, type=const.INFO, delay=0.5, show_msgs=True):
 def requires_auth(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if auth_state().user is not None:
+        if auth_state.user is not None:
             return fn(*args, **kwargs)
         else:
             set_auth_message(f'{fn.__name__} requires authentication!')
@@ -68,14 +110,14 @@ def logout():
     # Clear server-side token from database FIRST (before browser cookie)
     # If DB clear fails, token remains in DB but is orphaned (security concern, but better than leaving token + cookie)
     db_cleared = False
-    if auth_state().user and const.USERNAME in auth_state().user:
-        db_cleared = AuthSession.clear_session(store, auth_state().user[const.USERNAME])
+    if auth_state.user and const.USERNAME in auth_state.user:
+        db_cleared = AuthSession.clear_session(store, auth_state.user[const.USERNAME])
         if not db_cleared:
-            logging.warning(f"Failed to clear session token for {auth_state().user[const.USERNAME]} during logout")
+            logging.warning(f"Failed to clear session token for {auth_state.user[const.USERNAME]} during logout")
 
     # Clear session state
-    auth_state().user = None
-    auth_state().skip_cookie_login = True  # Skip auto-login on this rerun only
+    auth_state.user = None
+    auth_state.skip_cookie_login = True  # Skip auto-login on this rerun only
 
     # Clear browser cookie
     session_token_manager.delete(SESSION_TOKEN_NAME)
@@ -88,7 +130,7 @@ def logout():
     st.rerun()
 
 def authenticated():
-    return auth_state().user is not None
+    return auth_state.user is not None
 
 # ------------------------------------------------------------------------------
 # Main auth service
@@ -99,8 +141,8 @@ def _try_cookie_login():
     Returns True if successful, False otherwise.
     """
     # Skip if user just logged out
-    if auth_state().skip_cookie_login:
-        auth_state().skip_cookie_login = False
+    if auth_state.skip_cookie_login:
+        auth_state.skip_cookie_login = False
         return False
 
     # Get token from browser cookie
@@ -111,7 +153,7 @@ def _try_cookie_login():
     # Validate token against database (token is looked up in DB, user data returned)
     user = AuthSession.validate_session(store, token)
     if user:
-        auth_state().user = user
+        auth_state.user = user
         set_auth_message('Auto-logged in', type=const.SUCCESS, show_msgs=True)
         st.rerun()
         return True
@@ -176,7 +218,7 @@ def _handle_signup_submission(email: str, password: str, confirm_password: str, 
             set_auth_message('Failed to send verification email. Please try again.', type=const.ERROR, show_msgs=True)
             return
         # Store email in session state for PIN verification
-        auth_state().signup_email = email
+        auth_state.signup_email = email
         set_auth_message(f'Verification code sent to {email}', type=const.SUCCESS, show_msgs=show_msgs)
         st.rerun()
     except Exception as ex:
@@ -186,7 +228,8 @@ def _handle_signup_submission(email: str, password: str, confirm_password: str, 
 
 def _show_pin_verification_form(show_msgs):
     """Display PIN verification form."""
-    set_auth_message(f'Enter the verification code sent to {auth_state().signup_email}', delay=None, show_msgs=True)
+    signup_email = auth_state.signup_email
+    set_auth_message(f'Enter the verification code sent to {signup_email}', delay=None, show_msgs=True)
 
     with st.form("pin_form", border=True):
         pin = st.text_input("Verification Code (6 digits)", value='', max_chars=6)
@@ -194,29 +237,29 @@ def _show_pin_verification_form(show_msgs):
 
     # Resend button outside form
     if st.button("Resend Code", use_container_width=False):
-        user = SignupManager.get_pending_user(store, auth_state().signup_email)
+        user = SignupManager.get_pending_user(store, auth_state.signup_email)
         if user:
             # Regenerate PIN and send
             new_pin = SignupManager.generate_pin()
             store.upsert({
                 'table': SignupManager.PENDING_USERS_TABLE,
                 'data': {
-                    'username': auth_state().signup_email,
+                    'username': auth_state.signup_email,
                     'password': user['password'],
                     'validation_pin': new_pin,
                     'is_validated': 0,
                     'expires_at': user['expires_at'],
                 }
             })
-            EmailService.send_signup_pin(auth_state().signup_email, new_pin)
+            EmailService.send_signup_pin(auth_state.signup_email, new_pin)
             set_auth_message('New code sent', type=const.SUCCESS, show_msgs=True)
         else:
             set_auth_message('Signup session expired. Please sign up again.', type=const.ERROR, show_msgs=True)
-            auth_state().signup_email = None
+            auth_state.signup_email = None
             st.rerun()
 
     if verify_button and pin:
-        _handle_pin_verification(auth_state().signup_email, pin, show_msgs)
+        _handle_pin_verification(auth_state.signup_email, pin, show_msgs)
 
 
 def _handle_pin_verification(email: str, pin: str, show_msgs: bool):
@@ -234,8 +277,8 @@ def _handle_pin_verification(email: str, pin: str, show_msgs: bool):
         return
 
     # Auto-login
-    auth_state().user = user
-    auth_state().signup_email = None
+    auth_state.user = user
+    auth_state.signup_email = None
 
     # Create session token for auto-login (remember me)
     token = AuthSession.create_session(store, user, expires_in_days=30)
@@ -284,7 +327,7 @@ def _handle_login_submission(username, password, remember_me, show_msgs):
         return
 
     # Login successful
-    auth_state().user = user
+    auth_state.user = user
 
     # If "Remember me" checked, create server-side session token
     if remember_me:
@@ -310,7 +353,7 @@ def _show_logged_in_ui(sidebar):
     if logout_widget('Logout'):
         logout()  # logout() calls st.rerun() internally
 
-    if auth_state().user[const.SU] == 1:
+    if auth_state.user[const.SU] == 1:
         if su_widget("Super users can edit user DB"):
             _superuser_mode()
 
@@ -345,13 +388,13 @@ def auth(sidebar=True, show_msgs=True):
         st.subheader('Authentication')
 
     # Check if already authenticated
-    if auth_state().user is not None:
+    if auth_state.user is not None:
         _show_logged_in_ui(sidebar)
-        return auth_state().user[const.USERNAME]
+        return auth_state.user[const.USERNAME]
 
     # Try to auto-login from cookie
     if _try_cookie_login():
-        return auth_state().user[const.USERNAME]
+        return auth_state.user[const.USERNAME]
 
     forms_location = st.sidebar if sidebar else st
     with forms_location:
@@ -365,7 +408,7 @@ def auth(sidebar=True, show_msgs=True):
 
             with signup_tab:
                 # Check if in middle of signup flow (waiting for PIN)
-                if auth_state().signup_email:
+                if auth_state.signup_email:
                     _show_pin_verification_form(show_msgs=show_msgs)
                 else:
                     _show_signup_form(show_msgs=show_msgs)
@@ -373,7 +416,7 @@ def auth(sidebar=True, show_msgs=True):
             # Only show login form (no signup)
             _show_login_form(show_msgs=show_msgs)
 
-    return auth_state().user[const.USERNAME] if auth_state().user is not None else None
+    return auth_state.user[const.USERNAME] if auth_state.user is not None else None
 
 
 # ------------------------------------------------------------------------------
@@ -479,5 +522,5 @@ def admin():
         store = StorageFactory().get_provider(STORAGE, allow_db_create=True, if_table_exists='ignore')
 
         # Fake the admin user token to enable superuser mode (password field isn't required)
-        auth_state().user = {const.USERNAME: 'admin', const.SU: 1}
+        auth_state.user = {const.USERNAME: 'admin', const.SU: 1}
         _superuser_mode()

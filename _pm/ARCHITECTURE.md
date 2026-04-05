@@ -1,6 +1,6 @@
 # Architecture: Simple Authentication for Streamlit Apps
 
-**Version 1.0.1** | Updated April 5, 2026 | **Server-Side Session Tokens**
+**Version 1.0.2** | Updated April 5, 2026 | **Server-Side Session Tokens with Security-by-Design**
 
 ## Core Philosophy
 
@@ -48,8 +48,8 @@ The public API is accessed via the `st_auth_simple` package, providing a clean s
      │                      │
 ┌────▼──────────────┐  ┌────▼────────────────────────────┐
 │  Session State    │  │  AuthSession                    │
-│  - auth_state()   │  │  + CookieManager                │
-│  - state.user     │  │  - Server-side token mgmt       │
+│  - auth_state     │  │  + SessionTokenManager          │
+│  - auth_state.user│  │  - Server-side token mgmt       │
 │  - Persists       │  │  - 30-day expiration            │
 │    through reruns │  │  - Stored in database           │
 │                   │  │  - Synchronous validation       │
@@ -115,19 +115,24 @@ store = StorageFactory().get_provider('SQLITE' or 'AIRTABLE')
 - Clean separation between factory logic and provider logic
 
 ### 3. **Session State Management**
-Streamlit's session state is wrapped in `auth_state()` to ensure logins persist through top-to-bottom reruns.
+Authentication state is stored in a TypedDict and accessed via a minimal proxy to ensure isolation from client apps' session state:
 
 ```python
-def auth_state():
-    if 'user' not in state:
-        state.user = None
-    return state
+class AuthState(TypedDict):
+    user: dict | None
+    skip_cookie_login: bool
+    signup_email: str | None
+
+# Proxy provides attribute access while keeping data in st.session_state['auth_state']
+auth_state.user = user_dict
+auth_state.signup_email = email
 ```
 
 **Why this pattern:**
 - Streamlit reruns the entire script on every interaction; session state is the only way to maintain state
-- Wrapping ensures graceful reinitialization if cache is cleared
-- Decouples state management from global variables
+- Isolated in `st.session_state['auth_state']` to prevent accidental collision with client app data
+- TypedDict provides type hints for IDE support
+- Minimal proxy gives clean `auth_state.user` syntax without complex wrapper logic
 
 ### 4. **Decorator Pattern** (Protected Functions)
 `@requires_auth` decorator protects functions so they only run when a user is authenticated.
@@ -149,23 +154,99 @@ from st_auth_simple import auth, authenticated, logout, requires_auth
 
 This separation keeps the public interface clean while allowing internal `authlib` package to evolve without breaking the API.
 
-### 6. **Server-Side Session Tokens** (Token Persistence)
-Rather than storing user data in the browser, tokens are managed server-side:
+### 6. **Server-Side Session Tokens** (Security-by-Design)
 
-```python
-# Browser: Stores only a secure 32-character token
-# Server: Stores token + expiration in database
-# Read: Uses st.context.cookies to get token from browser
-token = st.context.cookies.get(cookie_name)
+This architecture separates the **browser's session identifier** from the **server's session data**:
 
-# Write: Uses st.html() JavaScript to set browser cookie with token only
-# JavaScript: document.cookie = name + "=" + token + "; expires=..."
-
-# Validation: Token lookup in database returns user data
-user = AuthSession.validate_session(store, token)
+```
+BROWSER STORES:          SERVER STORES (DATABASE):
+┌─────────────────┐      ┌──────────────────────────┐
+│ 32-char token   │  ←→  │ users table:             │
+│ (meaningless)   │      │  - auth_token = token    │
+└─────────────────┘      │  - expires_at = date     │
+                         │  - username = user       │
+                         │  - password = encrypted  │
+                         └──────────────────────────┘
 ```
 
-This provides truly persistent "Remember me" functionality while keeping the browser's token separate from sensitive user data. All validation and expiration checking happens server-side in the database.
+**The Token Flow:**
+
+1. **On Login with "Remember Me":**
+   - User submits credentials
+   - Server validates them against database
+   - `AuthSession.create_session()` generates a secure 32-character random token
+   - Token stored in database: `users.auth_token = token`
+   - Expiration stored: `users.expires_at = now + 30 days`
+   - Token sent to browser via `SessionTokenManager.persist_token()`
+   - Browser stores ONLY the token (not user data)
+
+2. **On Browser Reopen (Auto-Login):**
+   - Browser sends stored token to server
+   - `SessionTokenManager.retrieve_token()` reads token from browser
+   - `AuthSession.validate_session(store, token)` queries DB:
+     ```sql
+     SELECT * FROM users WHERE auth_token = ?
+     ```
+   - If found AND `expires_at > now` → User is validated
+   - If not found OR expired → Token is invalid, show login form
+   - User data comes from DB, not from browser
+
+3. **On Logout:**
+   - `AuthSession.clear_session()` nulls the token in database
+   - Token cleared from browser
+   - Immediate effect: Token is no longer valid
+   - Next page load will find no matching token
+
+**Why This Design? (Security-by-Design)**
+
+| Approach | Browser | Server | Risk |
+|----------|---------|--------|------|
+| **v1.0.0 (Cookies with user data)** | User dict (encrypted) | None | If cookie stolen: attacker has all user data + encrypted password |
+| **Naive token (stateless)** | User dict + token | None | If cookie stolen: attacker has all user data + can assume identity until token expires client-side |
+| **Server-Side Tokens (This)** | 32-char token only | Token metadata | If token stolen: attacker knows a valid token exists but NOT which user (must still query DB), can only use until expiration, has no user data |
+
+**Key Security Properties:**
+
+✅ **No Sensitive Data in Browser**
+- Browser stores only a 32-character random string
+- This string is meaningless without the database
+- Encrypted passwords never leave the server
+
+✅ **Server is Always Authoritative**
+- Expiration is checked on server (database)
+- User data comes from database, not browser
+- Even if token cookie is old/stale, server determines validity
+- Logout is immediate (token nulled in DB)
+
+✅ **Token is Stateless on Browser, Stateful on Server**
+- Browser: "I have token XYZ" (no metadata)
+- Server: Maintains token state (expiration, validity, user)
+- Server can revoke tokens without user action
+
+✅ **Defense Against Common Attacks**
+
+| Attack | Protection |
+|--------|-----------|
+| Cookie theft | Token alone is useless; attacker must query DB to know which user it belongs to |
+| XSS cookie theft | No user data in cookie; stolen token expires in 30 days; no immediate account takeover |
+| Cookie tampering | Tampered token won't exist in DB; query returns no user |
+| Logout timing issues | Logout immediately nulls token in DB; no async JavaScript race conditions |
+| Expired session replay | DB check prevents use of expired tokens |
+
+**Not Performance Optimization, Design Principle**
+
+The token must be in the browser because:
+1. Browser is stateless between visits
+2. Only identifier between browser and server session is the token
+3. Token enables lookup of user session in database
+
+Storing user data in browser would be "faster" (fewer DB queries) but breaks security because:
+- Browser state becomes authoritative
+- Server can't revoke sessions until timeout
+- Logout isn't immediate
+- Stolen cookies reveal full user data
+
+This is a **trade-off by design**: One extra DB query per page load ensures security, not performance.
 
 ---
 
@@ -205,9 +286,20 @@ provider/
 
 ### **authlib/common/** (Utilities)
 - `crypto.py` — AES256-CBC encryption for password storage
-- `cookie_manager.py` — Browser cookies for "Remember me" feature
+- `session_token_manager.py` — Browser session token persistence (replaces cookie_manager)
+- `session_token_component.py` — Low-level token read/write via st.context.cookies and st.html()
 - `const.py` — Constants (field names, message types)
 - `dt_helpers.py` — Date/time utilities
+
+**Session Token Manager:**
+```python
+manager = SessionTokenManager()
+manager.set(token_name, token_value)    # Persist to browser
+manager.get(token_name)                 # Retrieve from browser
+manager.delete(token_name)              # Clear from browser
+```
+
+Note: Old `cookie_manager.py` still available for backward compatibility but deprecated in favor of `SessionTokenManager`.
 
 ### **app.py** (Demo)
 Minimal example showing how to integrate `authlib` into a Streamlit app.
@@ -257,10 +349,13 @@ START
 
 ### Helper Functions (Separated for Clarity)
 
-- **`_try_cookie_login()`** — Attempts auto-login from persistent browser cookie
-  - Reads cookie via `st.context.cookies`
-  - Validates password hash matches DB
-  - Deletes invalid/expired cookies
+- **`_try_cookie_login()`** — Attempts auto-login from persistent browser token
+  - Reads token from browser via `SessionTokenManager.retrieve_token()`
+  - Validates token exists in database
+  - Checks if token is expired
+  - **Never** validates password during auto-login (token is proof of identity)
+  - Deletes invalid/expired tokens from database
+  - On success: Fetches user data from database and sets session
   
 - **`_show_login_form()`** — Renders login card with `st.form`
   - All fields visible at once (username, password, remember me)
@@ -269,20 +364,31 @@ START
   
 - **`_handle_login_submission()`** — Validates credentials
   - Queries database for username
-  - Decrypts and compares password
+  - Decrypts and compares password hash (only during login, not auto-login)
   - Sets session state on success
-  - Saves cookie if "Remember me" checked
+  - If "Remember me" checked: Creates session token via `AuthSession.create_session()`
+  - Persists token to browser via `SessionTokenManager.persist_token()`
   
 - **`_show_logged_in_ui()`** — Shows authenticated user interface
   - Displays logout button
   - Conditionally shows admin panel for superusers
 
-### Logout Flow
+### Logout Flow (Immediate & Safe)
 1. User clicks Logout button
-2. `logout()` clears session state
-3. `logout()` deletes persistent cookie
-4. `logout()` calls `st.rerun()` to force re-authentication
-5. User sees login form again
+2. `AuthSession.clear_session()` nulls the token in database (IMMEDIATE)
+   - At this moment, token becomes invalid for ALL future requests
+   - Even if browser cookie still exists, token lookup will fail
+3. Session state cleared from memory
+4. Browser token/cookie deleted via `SessionTokenManager.delete()`
+5. `st.rerun()` forces re-authentication
+6. Next page load: `_try_cookie_login()` reads token, DB lookup returns NULL, login form shown
+7. User sees login form
+
+**Why This Order Matters:**
+- DB is cleared FIRST (makes token invalid server-side)
+- Browser cookie cleared SECOND (best-effort cleanup)
+- If step 4 fails (JavaScript issue), step 2 ensures token is already invalid
+- Result: Logout is secure even if browser cleanup fails
 
 ### Server-Side Session Token Flow
 1. **On Login (with Remember me):**
@@ -531,41 +637,86 @@ Currently: Manual testing via `app.py` and `admin.py`
 
 ## Summary
 
-**st-auth-simple v1.0.1** is a production-ready authentication system excelling at its core goal: **simple, integrated username/password authentication for Streamlit apps**.
+**st-auth-simple v1.0.2** is a production-ready authentication system excelling at its core goal: **simple, integrated username/password authentication for Streamlit apps with security-by-design**.
 
 ### Highlights
 
 ✅ **Pip-installable** — Standard Python package (`st-auth-simple`)  
 ✅ **Clean public API** — via `st_auth_simple` package shim  
-✅ **Minimal dependencies** — Only Streamlit, pycryptodome, python-dotenv (core)  
+✅ **Minimal dependencies** — Only Streamlit, pycryptodome, python-dotenv, sendgrid (core)  
 ✅ **Persistent login** — 30-day server-side session tokens stored in database  
 ✅ **Multiple backends** — SQLite (local) and Airtable (cloud)  
 ✅ **Clear authentication flow** — Refactored `_auth()` with logical helper functions  
-✅ **Proper logout** — Synchronous DB clearing + session + forces re-authentication  
+✅ **Immediate logout** — Synchronous DB token clearance, not timing-dependent  
 ✅ **Admin interface** — User management (create, edit, delete)  
+✅ **Optional email signup** — PIN-based registration with email verification  
 ✅ **Production-ready code** — Clean, well-structured, documented  
-✅ **No user data in browser** — Only 32-char tokens; validation happens server-side  
 
-### v1.0.1 Improvements (Server-Side Tokens)
+### v1.0.2 Improvements (Security-by-Design)
 
-- **Token-based sessions** instead of storing user data in cookies
-- **Synchronous operations** — No JavaScript timing issues on logout
-- **Server-controlled expiration** — Token validity checked in database
-- **Better security** — Browser never sees user credentials or encrypted passwords
-- **Linear code** — No status flags needed for state management
+- **No user data in browser** — Only 32-char tokens; user data never sent to browser
+- **Server-controlled sessions** — All validation and expiration checked in database
+- **Immediate logout** — Token nulled in database immediately; no race conditions
+- **Failsafe operations** — All DB writes wrapped with error handling
+- **Email signup** — Optional self-service registration with PIN verification
+- **Terminology clarity** — Renamed "cookies" to "session tokens" for accuracy
+
+### Security Model
+
+This architecture implements **security-by-design** through token-based sessions:
+
+| Layer | What's Stored | Who Controls It | When Validated |
+|-------|--------------|-----------------|-----------------|
+| Browser | 32-char random token | Client-side script | Never (just storage) |
+| Database | Token + expiration | Server | Every page load |
+| Memory | User data | Streamlit session | Per request |
+
+**Threat Model:**
+- If token is stolen: Attacker has only the token, must query DB to identify user, access expires in 30 days
+- If cookie is altered: DB lookup fails, invalid token returns no user
+- If logout fails on browser side: DB token already nulled, next request is unauthorized
 
 ### Architecture Strengths
 
-- **Provider pattern** enables swapping backends without code changes
-- **Session state wrapper** ensures logins survive Streamlit reruns
-- **Custom cookie manager** using Streamlit native APIs (no external libs)
-- **AuthSession class** manages token generation, validation, and cleanup
-- **Refactored auth flow** with separation of concerns (helper functions)
-- **Form-based UI** with proper login card rendering
+- **Security-by-design** — Server is always authoritative, not browser
+- **Provider pattern** — Swappable storage backends without code changes
+- **Session state wrapper** — Logins survive Streamlit reruns
+- **Session token manager** — Clean abstraction for token persistence
+- **AuthSession class** — Cryptographically secure token generation and validation
+- **Failsafe DB writes** — All operations wrapped with error handling
+- **Refactored auth flow** — Separation of concerns (helper functions)
+- **Form-based UI** — Proper login card rendering with multi-step signup
 
 ### When to Use
 
-Ideal for: Internal tools, dashboards, admin panels, low-threat scenarios, Streamlit Cloud deployments
-Not suitable for: Public-facing apps with high security requirements, enterprise SSO
+**Ideal for:**
+- Internal tools and dashboards
+- Admin panels with trusted users
+- Low-threat scenarios (behind corporate firewall)
+- Streamlit Cloud deployments
+- Rapid prototyping with authentication needs
 
-For high-security needs, consider Auth0, Firebase Auth, or enterprise solutions. For everything else, st-auth-simple delivers on its promise: **ease of integration without operational complexity**.
+**Not suitable for:**
+- Public-facing apps with high security requirements
+- Enterprise SSO (use Auth0, Okta, etc.)
+- Large-scale multi-tenant systems
+- Apps requiring advanced features (2FA, passwordless, etc.)
+
+---
+
+## Security Philosophy
+
+This system prioritizes **simplicity with security**, not absolute security:
+
+> **We accept the limitations of a simple system (no enterprise features, single deployment, trusted networks) in exchange for clear, understandable security properties.**
+
+The server-side token approach means:
+- ✅ Authentication is straightforward to audit and verify
+- ✅ Logout is immediate and guaranteed
+- ✅ No complex async JavaScript state
+- ✅ Easy to understand data flow
+- ❌ Not suitable for hostile environments
+- ❌ Requires secure deployment (HTTPS, firewall)
+- ❌ No built-in rate limiting or brute-force protection
+
+For internal tools and small-scale apps, this is exactly right. For public internet, use dedicated auth platforms.

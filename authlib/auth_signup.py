@@ -8,7 +8,6 @@ from os import environ as osenv
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
-from authlib.common.crypto import aes256cbcExtended
 from authlib.common.dt_helpers import dt_from_str
 
 

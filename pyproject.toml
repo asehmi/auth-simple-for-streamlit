@@ -62,7 +62,7 @@ Repository = "https://github.com/asehmi/auth-simple-for-streamlit.git"
 Issues = "https://github.com/asehmi/auth-simple-for-streamlit/issues"
 
 [tool.setuptools]
-packages = ["st_auth_simple", "authlib", "authlib.common", "authlib.repo",
+packages = ["authlib", "authlib.common", "authlib.repo",
             "authlib.repo.provider", "authlib.repo.provider.sqlite",
             "authlib.repo.provider.airtable"]
 
