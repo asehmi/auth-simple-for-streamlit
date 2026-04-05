@@ -11,6 +11,11 @@ from ..base_provider import StorageProvider
 from .settings import SQLITE_SETTINGS
 from . import DatabaseError
 
+# Get users table name from settings
+def _get_users_table():
+    from .settings import SQLITE_SETTINGS
+    return SQLITE_SETTINGS.USERS_TABLE if hasattr(SQLITE_SETTINGS, 'USERS_TABLE') else 'USERS'
+
 # Get pending users table name from settings
 def _get_pending_users_table():
     from .settings import SQLITE_SETTINGS
@@ -33,15 +38,17 @@ class SQLiteProvider(StorageProvider):
 
         self.con = SQLiteProvider._create_database(db=self.db, db_name=self.db_name, allow_db_create=allow_db_create)
 
+        # Create users table for login and session management
+        users_table = _get_users_table()
         SQLiteProvider._create_table(
             con=self.con,
             db_name=self.db_name,
-            table_name='USERS',
+            table_name=users_table,
             col_spec='id INTEGER PRIMARY KEY, username UNIQUE ON CONFLICT REPLACE, password, su INTEGER, auth_token, expires_at',
             if_table_exists=if_table_exists
         )
 
-        # Create PENDING_USERS table for signup flow
+        # Create pending users table for signup flow
         pending_users_table = _get_pending_users_table()
         SQLiteProvider._create_table(
             con=self.con,
@@ -150,7 +157,7 @@ class SQLiteProvider(StorageProvider):
             }, 500)
 
     # UPDATE or CREATE
-    # Note, username is UNIQUE ON CONFLICT REPLACE, so we use INSERT to get UPSERT behaviour
+    # Use REPLACE to handle UNIQUE constraint on username (replaces existing row if username exists)
     def upsert(self, context: dict=None) -> None:
         """Updates or inserts a new user record with supplied data (cols + value dict)."""
         assert(context is not None and context.get('data') is not None)
@@ -169,7 +176,7 @@ class SQLiteProvider(StorageProvider):
                 values_.append(f'"{v}"')
         values = ', '.join([v for v in values_])
 
-        query = f"INSERT INTO {table_name}({cols}) VALUES({values})"
+        query = f"REPLACE INTO {table_name}({cols}) VALUES({values})"
 
         logging.info(f"Upsert: {query}")
         try:
