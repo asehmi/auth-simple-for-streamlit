@@ -1,30 +1,40 @@
 
 # Simple Authentication for Streamlit Apps
-> _A simple username/password database authentication solution for Streamlit_
+> _A simple username/password database authentication solution for Streamlit with server-side session tokens_
 
 > Arvindra Sehmi, CloudOpti Ltd. | [Website](https://sehmi-conscious.medium.com/about) | [LinkedIn](https://www.linkedin.com/in/asehmi/)
 
-> Updated: 9 July, 2024
+> **Version 1.0.2** | Updated: April 5, 2026
 
 ---
 
-**TL;DR:** This is a simple username/password login authentication solution using a backing database. Both SQLite and Airtable are supported.
+**TL;DR:** A simple, production-ready username/password authentication solution with:
+- Server-side session tokens (no sensitive data in browser)
+- Optional email-based user signup with PIN verification
+- Support for SQLite (local) and Airtable (cloud) backends
+- Pluggable message callbacks for custom UI integration
+- Persistent "Remember me" sessions (30 days)
 
 ## Quick start
 
 To get started immediately with a SQLite database, follow these steps:
 
 1. Clone this repo
-2. Copy the sample environment settings file `env.sample` to `.env`
+2. Copy the sample environment settings file `.env.sample` to `.env`
 3. Install requirements
 
     > `pip install -r requirements.txt`
 
-4. Initialize the SQLite database and create some users (including at least one super user)
+4. *(Optional)* Configure SendGrid for email signup:
+   - Get an API key from [SendGrid](https://sendgrid.com)
+   - Add to `.env`: `SENDGRID_API_KEY=...` and `NOTIFICATION_FROM_EMAIL=...`
+   - Set `ALLOW_USER_SIGN_UP='True'` in `.env` to enable self-service signup
+
+5. Initialize the SQLite database and create some users (including at least one super user)
 
     > `streamlit run admin.py`
 
-5. Finally, run the test application
+6. Finally, run the test application
 
     > `streamlit run app.py`
 
@@ -38,35 +48,49 @@ In the meantime, I think a solution like madflier's will be more palatable for m
 
 ## What I've built
 
-I've redesigned the original solution and added the following functionality:
+**v1.0.2 Highlights:**
 
-- Session state support so logins survive Streamlit's top-down reruns which occur in it's normal execution.
+- **Server-side session tokens** — Browser stores only a 32-character meaningless token; all user data stays on the server. Token metadata (expiration) validated on every page load. Provides strong security by design.
 
-- Support for `logout`, `authenticated` check, and a `requires_auth` function decorator to protect areas of your own apps, e.g. secure pages in a multi-page Streamlit application.
-  - See how `requires_auth` is used to secure superuser functions in `auth.py`. You can do the same in your code.
+- **Session state support** — Logins survive Streamlit's top-down reruns via isolated `st.session_state['auth_state']` dictionary, preventing collision with client app state.
 
-- Built-in authentication/login status header widget that will sit nicely in most Streamlit apps.
+- **Email-based signup with PIN verification** — Optional self-service user registration via SendGrid email with 6-digit PIN validation. Users move from `pending_users` → `users` table after PIN verification.
 
-- Refactored the SQLite local DB dependency in the main auth module so it uses a DB provider design pattern implementation.
+- **Pluggable message callbacks** — Client apps control how auth messages are displayed via `on_message_cb` parameter. Supports custom callbacks, console output, or silent mode. Decouples message presentation from library logic.
 
-- Given the refactoring, I added a simple factory for multiple provider implementations, so different persistence technologies could be used, for example a cloud DB.
-  - In fact, I built an [Airtable](https://airtable.com) cloud database provider which can replace SQLite as an alternative.
+- **Logout is immediate** — Server-side token clearance makes logout synchronous (no JavaScript race conditions or timing issues).
 
-- The abstract provider interface is super simple and should allow _almost_ any database to be adapted, and it works fine for this specific auth use case in the implementations I created.
-  - Some Streamliters have mentioned Google Sheets and Firebase - yep, they should be easy.
+- **Support for `logout`, `authenticated` check, and `requires_auth` decorator** to protect areas of your own apps (e.g., secure pages in multi-page Streamlit apps).
 
-- Passwords are stored hashed (MD5) & encrypted (AES256 CBC Extended) in the database, not as plain text. Note, the password is never sent to the
-browser - it's retrieved, decrypted and matched on the Streamlit server - so is quite secure. I'm definitely following OWASP best practice.
+- **Built-in authentication UI** — Login/signup forms and status header that integrate seamlessly into Streamlit apps.
 
-- Configuration has been externalized for things like database names and locations, cloud service account secrets, api keys, etc. The configuration is managed in a root `.env` and `env.py` files, and small Python settings files for the main app (`app_settings.py`), and each provider implementation (`settings.py`).
+- **Provider design pattern** — Database abstraction layer allows swapping between SQLite and Airtable with a single `.env` variable.
 
-- There's just enough exception handling to allow you to get a handle on your own extension implementations.
+- **Multiple backends** — [Airtable](https://airtable.com) cloud database provider alongside local SQLite. Abstract interface allows easy addition of Firebase, Google Sheets, Postgres, etc.
 
-- I use `debugpy` for debugging Streamlit apps, and include my vs-code `launch.json` file.
+- **Strong password security** — Passwords encrypted with AES256-CBC and never sent to browser. Decryption and validation happen server-side only.
+
+- **Externalized configuration** — All secrets and settings managed via `.env` file (tokens, API keys, database paths, table names, encryption keys, etc.).
+
+- **Robust error handling** — Failsafe DB write operations prevent inconsistent state. All errors logged appropriately.
+
+- **Production-ready code** — Well-structured, fully documented, pip-installable package.
+
+## Key Features by Version
+
+**v1.0.0** — Initial release with SQLite/Airtable support and basic session management.
+
+**v1.0.1** — Refactored to server-side session tokens, added "Remember me" persistence, improved security model.
+
+**v1.0.2 (Current)** — Email signup with PIN verification, pluggable message callbacks, session state isolation, terminology cleanup (cookies → session tokens).
 
 ## Contributions
 
-- Cookie support contributed by [@ch-saeki](https://github.com/ch-saeki) provides a `Remember me` feature at login.
+- Session token architecture and design principles
+- Email signup with PIN verification via SendGrid
+- Message callback pattern for decoupled UI
+- Improved error handling and state management
+- Contributions welcome! See [LICENSE](./LICENSE) (MIT)
 
 
 All code is published under [MIT license](./LICENSE), so feel free to make changes and please **fork the repo if you're making changes and submit pull requests**.
@@ -134,59 +158,133 @@ A full example (which includes Airtable and encryption key settings) is availabl
 
 ### How to create an Airtable
 
-1. First, login into or create a (free) [**Airtable account**](https://airtable.com/account).
-2. Next, follow these steps to create an Airtable:
+1. Login to or create a (free) [**Airtable account**](https://airtable.com/account)
+2. Create a base (database) and add the required tables:
 
-- Create a database (referred to as a _base_ in Airtable) and a table within the base.
-- You can call the base `profile` and the table `users`
-- Rename the primary key default table field (aka column) to `username` (field type 'Single line text')
-- Add a `password` field (field type 'Single line text')
-- Add a `su` (superuser) field (field type 'Number')
+**users table:**
+| Field | Type | Notes |
+|-------|------|-------|
+| `username` | Single line text | Primary key; stores email |
+| `password` | Single line text | AES256-CBC encrypted |
+| `su` | Number | 0 or 1 (superuser flag) |
+| `auth_token` | Single line text | Session token (empty if not logged in) |
+| `expires_at` | Single line text | ISO format datetime |
+
+**pending_users table:** *(Only if `ALLOW_USER_SIGN_UP='True'`)*
+| Field | Type | Notes |
+|-------|------|-------|
+| `username` | Single line text | Email awaiting verification |
+| `password` | Single line text | AES256-CBC encrypted |
+| `validation_pin` | Single line text | 6-digit PIN |
+| `is_validated` | Number | 0 (pending) or 1 (verified) |
+| `expires_at` | Single line text | PIN expiry time (ISO format) |
 
 ### Finding your Airtable settings
 
-1. You must initially create and then manage your Personal access token the 'Account' overview area
-2. For your base (e.g. `profile`) go to the 'Help menu' and select 'API documentation'
-3. In 'API documentation' select 'METADATA'
-4. In the `curl` example you will see the `appv------X-----c` and reference to `YOUR_SECRET_API_TOKEN` values
+1. Create a Personal Access Token in [Developer Hub](https://airtable.com/create/tokens)
+2. For your base, go to Help → API documentation → METADATA
+3. In the curl example, extract:
+   - `YOUR_SECRET_API_TOKEN` → Your `AIRTABLE_PAT`
+   - `appv---X---c` → Your `AIRTABLE_BASE_KEY`
+   - Table names → `USERS_TABLE` and `PENDING_USERS_TABLE`
 
-    ```bash
-    $ curl https://api.airtable.com/v0/appv---X---c/users -H "Authorization: Bearer YOUR_SECRET_API_TOKEN"
-    ```
-    
-    - `YOUR_SECRET_API_TOKEN` is your Personal access token which you should create in the [Developer Hub](https://airtable.com/create/tokens),
-    - `YOUR_SECRET_API_TOKEN` is your 'AIRTABLE_PAT',
-    - `appv------X-----c` is your 'AIRTABLE_BASE_KEY',
-    - `users` will be your 'USERS_TABLE'
-
-### Configuring Airtable's app settings 
-
-Assign these values to the keys in the Airtable section of the `.env` file in the application root folder.
-
-For example:
-
-**.env** file
-
+Example:
 ```bash
-# Options are 'SQLITE', 'AIRTABLE'
-STORAGE='AIRTABLE'
-
-# Airtable account
-AIRTABLE_PAT = 'pat---X---e'
-AIRTABLE_BASE_KEY = 'app---X---c'
-USERS_TABLE = 'users'
+$ curl https://api.airtable.com/v0/appv---X---c/users -H "Authorization: Bearer YOUR_SECRET_API_TOKEN"
 ```
 
-A full example (which includes SQLite settings) is available in `env.sample`.
+### Configuring Airtable in .env
 
-That's it! You're ready now to use the admin application or Airtable directly to manage the credentials of your users.
+**.env** file
+```bash
+STORAGE='AIRTABLE'
+AIRTABLE_PAT='pat---X---e'
+AIRTABLE_BASE_KEY='app---X---c'
+USERS_TABLE='users'
+PENDING_USERS_TABLE='pending_users'
+```
 
-## TODO
+See `.env.sample` for a complete example.
 
-Caveat emptor: You're free to use this solution at your own risk. I have a few features on my wish list:
+## Configuring Email Signup (SendGrid)
 
-- In addition to *username*, *password*, and *su* I want to add additional useful user data to the database: *logged_in*, *expires_at*, *logins_count*, *last_login*, *created_at*, *updated_at*.
-- Provide a Streamlit component wrapper to make it easy to _pip install_ (`st_auth` maybe??)
-- JavaScript API library making it easy to use the authentication DB in custom component implementations.
-- Would be nice to enhace the library and make an Auth0 provider (leverage my [Auth0 component](https://auth0.com/blog/streamlit-user-and-api-authentication/)).
-- Deploy the demo app on [Streamlit sharing](https://share.streamlit.io/) and use it's secrets store instead of my `.env` solution.
+To enable self-service user signup with email verification:
+
+1. Create a [SendGrid](https://sendgrid.com) account and generate an API key
+2. Add to `.env`:
+```bash
+ALLOW_USER_SIGN_UP='True'
+SENDGRID_API_KEY='SG.xxxxx...'
+NOTIFICATION_FROM_EMAIL='noreply@yourapp.com'
+SIGNUP_PIN_EXPIRY_MINUTES='30'  # Optional, defaults to 30
+PENDING_USERS_TABLE='pending_users'  # Required
+```
+
+3. Create the `pending_users` table in Airtable or SQLite (SQLite is auto-created)
+
+When enabled, users will see a "Sign Up" tab alongside the Login form. They'll enter email + password, receive a 6-digit PIN via email, verify it, and automatically be logged in.
+
+## Using the Auth Callback Pattern
+
+Client apps can control how auth messages are displayed by passing a callback function:
+
+```python
+from authlib.common import const
+import streamlit as st
+
+def my_message_handler(msg: str, type: int):
+    """Custom message display using Streamlit widgets."""
+    if type == const.ERROR:
+        st.error(msg)
+    elif type == const.SUCCESS:
+        st.success(msg)
+    elif type == const.WARNING:
+        st.warning(msg)
+    else:
+        st.info(msg)
+
+# Pass callback to auth()
+user = auth(sidebar=True, on_message_cb=my_message_handler)
+
+# Or use default console output
+user = auth(sidebar=True, on_message_cb="default")
+
+# Or silence all messages
+user = auth(sidebar=True, on_message_cb=None)
+```
+
+The callback receives `(message: str, type: int)` where type is one of:
+- `const.INFO` — Informational message
+- `const.SUCCESS` — Success message
+- `const.WARNING` — Warning message
+- `const.ERROR` — Error message
+
+## Architecture & Security
+
+See [`_pm/ARCHITECTURE.md`](./_pm/ARCHITECTURE.md) for detailed technical documentation including:
+
+- **Server-side session tokens** — Why tokens must be stored in the browser (and why that's actually secure)
+- **Threat model** — How this design defends against common attacks
+- **Component architecture** — Provider pattern, factory pattern, state management
+- **Data flow diagrams** — Login, auto-login (cookie), logout flows
+
+## Known Limitations & Considerations
+
+- **Single deployment only** — Not designed for distributed/multi-server deployments (session tokens are server-local)
+- **Trusted network** — Assumes users are on a trusted network (no additional encryption between browser and server)
+- **No MFA** — Single-factor authentication only (username/password + session token)
+- **No password reset** — Use admin.py to change user passwords
+- **Email signup requires SendGrid** — No built-in SMTP support
+
+These limitations are intentional trade-offs for simplicity and ease of deployment.
+
+## Future Enhancements
+
+Possible additions (contributions welcome):
+
+- Extended user fields (*created_at*, *last_login*, *logins_count*, etc.)
+- Additional auth backends (Auth0, OAuth, SAML)
+- Password reset via email link
+- Rate limiting on failed logins
+- SMTP support as SendGrid alternative
+- Database migration tools
