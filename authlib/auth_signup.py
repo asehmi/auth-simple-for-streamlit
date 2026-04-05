@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 from authlib.common.crypto import aes256cbcExtended
-from authlib.common.dt_helpers import tnow_iso_str, dt_from_str
+from authlib.common.dt_helpers import dt_from_str
 
 
 class SignupManager:
@@ -39,11 +39,10 @@ class SignupManager:
             Generated PIN string (6 digits)
         """
         pin = SignupManager.generate_pin()
-        expires_at = tnow_iso_str() if tnow_iso_str else datetime.now().isoformat()
 
         # Compute expiration as now + PIN_EXPIRY_MINUTES
         try:
-            now = dt_from_str(expires_at)
+            now = datetime.now()
             expires_at = (now + timedelta(minutes=SignupManager.PIN_EXPIRY_MINUTES)).isoformat()
         except (ValueError, TypeError):
             # Fallback: add minutes to current datetime
