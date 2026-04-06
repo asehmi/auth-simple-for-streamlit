@@ -257,7 +257,7 @@ $ curl https://api.airtable.com/v0/appv---X---c/users -H "Authorization: Bearer 
 STORAGE='AIRTABLE'
 AIRTABLE_PAT='pat---X---e'
 AIRTABLE_BASE_KEY='app---X---c'
-USERS_TABLE='users'
+USERS_TABLE='USERS'
 PENDING_USERS_TABLE='PENDING_USERS'
 ```
 

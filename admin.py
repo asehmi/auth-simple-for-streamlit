@@ -27,59 +27,70 @@ def main():
 
     if provider == 'AIRTABLE' and st.sidebar.checkbox('Tell me about Airtable'):
         airtable_info.expander('Getting started with an Airtable database', expanded=True)
-        airtable_info.info("Airtable **database creation** is not supported in this application.")
+        airtable_info.info("Airtable **database and tables** must be created manually. This admin interface only manages users within existing tables.")
         airtable_info.markdown(
             '''
             # Getting started with an Airtable database
-            
+
             ## How to create an Airtable
 
-            1. First, login into or create a (free) [**Airtable account**](https://airtable.com/account).
-            2. Next, follow these steps to create an Airtable:
+            1. Login to or create a (free) [**Airtable account**](https://airtable.com/account)
+            2. Create a base (database) and add the required tables:
 
-            - Create a database (referred to as a _base_ in Airtable) and a table within the base.
-            - You can call the base `profile` and the table `users`
-            - Rename the primary key default table field (aka column) to `username` (field type 'Single line text')
-            - Add a `password` field (field type 'Single line text')
-            - Add a `su` (superuser) field (field type 'Number')
+            ### USERS table
 
-            ## Finding your Airtable settings
+            | Field | Type | Notes |
+            |-------|------|-------|
+            | `username` | Single line text | Primary key; stores email |
+            | `password` | Single line text | AES256-CBC encrypted |
+            | `su` | Number | 0 or 1 (superuser flag) |
+            | `auth_token` | Single line text | Session token (empty if not logged in) |
+            | `expires_at` | Single line text | ISO format datetime |
 
-            1. You must initially create and then manage your Personal access token the 'Account' overview area
-            2. For your base (e.g. `profile`) go to the 'Help menu' and select 'API documentation'
-            3. In 'API documentation' select 'METADATA'
-            4. In the `curl` example you will see the `appv------X-----c` and reference to `YOUR_SECRET_API_TOKEN` values
+            ### PENDING_USERS table *(Optional - only if email signup is enabled)*
 
-                ```bash
-                $ curl https://api.airtable.com/v0/appv---X---c/users -H "Authorization: Bearer YOUR_SECRET_API_TOKEN"
-                ```
-                
-                - `YOUR_SECRET_API_TOKEN` is your Personal access token which you should create in the [Developer Hub](https://airtable.com/create/tokens),
-                - `YOUR_SECRET_API_TOKEN` is your 'AIRTABLE_PAT',
-                - `appv------X-----c` is your 'AIRTABLE_BASE_KEY',
-                - `users` will be your 'USERS_TABLE'
+            | Field | Type | Notes |
+            |-------|------|-------|
+            | `username` | Single line text | Email awaiting verification |
+            | `password` | Single line text | AES256-CBC encrypted |
+            | `validation_pin` | Single line text | 6-digit PIN |
+            | `is_validated` | Number | 0 (pending) or 1 (verified) |
+            | `expires_at` | Single line text | PIN expiry time (ISO format) |
 
-            ## Configuring Airtable's app settings 
-            
-            Assign these values to the keys in the Airtable section of the `.env` file in the application root folder.
-            
-            For example:
+            ## Finding your Airtable credentials
 
-            **.env** file
+            1. Create a Personal Access Token in [Developer Hub](https://airtable.com/create/tokens)
+            2. For your base, go to Help → API documentation → METADATA
+            3. In the curl example, extract:
+               - `YOUR_SECRET_API_TOKEN` → Your `AIRTABLE_PAT`
+               - `appv---X---c` → Your `AIRTABLE_BASE_KEY`
+               - Table names → `USERS_TABLE` and `PENDING_USERS_TABLE` (use uppercase)
 
+            Example curl command:
             ```bash
-            # Options are 'SQLITE', 'AIRTABLE'
-            STORAGE='AIRTABLE'
-
-            # Airtable account
-            AIRTABLE_PAT = 'pat---X---e'
-            AIRTABLE_BASE_KEY = 'app---X---c'
-            USERS_TABLE = 'users'
+            curl https://api.airtable.com/v0/appv---X---c/USERS -H "Authorization: Bearer YOUR_SECRET_API_TOKEN"
             ```
 
-            A full example (which includes SQLite settings) is available in `env.sample`.
+            ## Configuring Airtable in .env
 
-            That's it! You're ready now to use the admin application or Airtable directly to manage the credentials of your users.
+            **.env** file
+            ```bash
+            STORAGE='AIRTABLE'
+            AIRTABLE_PAT='pat---X---e'
+            AIRTABLE_BASE_KEY='app---X---c'
+            USERS_TABLE='USERS'
+            PENDING_USERS_TABLE='PENDING_USERS'
+            ```
+
+            **Optional: Enable email signup**
+            ```bash
+            ALLOW_USER_SIGN_UP='True'
+            SENDGRID_API_KEY='SG.xxxxx...'
+            NOTIFICATION_FROM_EMAIL='noreply@yourapp.com'
+            SIGNUP_PIN_EXPIRY_MINUTES='30'
+            ```
+
+            See `.env.sample` for a complete example.
 
             ---
 
